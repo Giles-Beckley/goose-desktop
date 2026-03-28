@@ -1,67 +1,53 @@
 import { useState } from 'react';
 import { useConnectionStore } from '../stores/connectionStore';
+import { useMcp } from '../hooks/useMcp';
 import { LoadingSpinner } from '../components/LoadingSpinner';
+import { TitleBar } from '../components/TitleBar';
 
 export function Register() {
-  const { setCredentials, setOnboarded, setStatus, setGcApiKey, setAiStatus } = useConnectionStore();
+  const { setCredentials, setOnboarded, setStatus } = useConnectionStore();
+  const { testConnection } = useMcp();
 
-  const [email, setEmail] = useState('');
   const [siteUrl, setSiteUrl] = useState('');
   const [mcpApiKey, setMcpApiKey] = useState('');
-  const [registering, setRegistering] = useState(false);
+  const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
 
-  const handleRegister = async () => {
-    if (!email || !siteUrl || !mcpApiKey) {
-      setError('Please fill in all fields.');
+  const handleConnect = async () => {
+    if (!siteUrl || !mcpApiKey) {
+      setError('Please fill in both fields.');
       return;
     }
 
-    setRegistering(true);
+    setConnecting(true);
     setError('');
-    setSuccessMessage('');
 
     try {
-      const result = await window.electronAPI.ai.register({
-        email,
-        siteUrl,
-        mcpApiKey,
-      });
+      // Test the MCP connection
+      const success = await testConnection(siteUrl, mcpApiKey);
 
-      if (result.success && result.api_key) {
-        // Save the GC API key securely
-        await window.electronAPI.credentials.saveGCApiKey(result.api_key);
-        setGcApiKey(result.api_key);
-
-        // Also save site credentials for MCP
-        await window.electronAPI.credentials.save({ siteUrl, apiKey: mcpApiKey });
-        setCredentials(siteUrl, mcpApiKey);
-
-        // Fetch status/tier info
-        try {
-          const status = await window.electronAPI.ai.status(result.api_key);
-          if (status.connected) {
-            setAiStatus(status);
-          }
-        } catch {
-          // Non-critical — proceed anyway
-        }
-
-        setStatus('connected');
-        setOnboarded(true);
-      } else {
-        setError(result.message || result.error || 'Registration failed. Please try again.');
+      if (!success) {
+        setError('Connection failed. Please check your Site URL and MCP API Key.');
+        setConnecting(false);
+        return;
       }
+
+      // Save site credentials
+      await window.electronAPI.credentials.save({ siteUrl, apiKey: mcpApiKey });
+      setCredentials(siteUrl, mcpApiKey);
+      setStatus('connected');
+      setOnboarded(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Connection failed. Check your internet connection.');
     } finally {
-      setRegistering(false);
+      setConnecting(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+    <div className="h-screen flex flex-col bg-gray-50">
+      <TitleBar />
+      <div className="flex-1 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-primary-100 rounded-2xl mb-4">
@@ -71,25 +57,12 @@ export function Register() {
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Welcome to Goose Commerce</h1>
           <p className="text-gray-500 mt-2">
-            Register your store to get started with AI-powered management.
+            Connect to your store to get started.
           </p>
         </div>
 
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email Address
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              />
-            </div>
-
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 WordPress Site URL
@@ -128,27 +101,28 @@ export function Register() {
               </div>
             )}
 
-            {successMessage && (
-              <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                <p className="text-sm text-green-600">{successMessage}</p>
-              </div>
-            )}
-
             <button
-              onClick={handleRegister}
-              disabled={registering || !email || !siteUrl || !mcpApiKey}
+              onClick={handleConnect}
+              disabled={connecting || !siteUrl || !mcpApiKey}
               className="w-full px-4 py-2.5 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              {registering && <LoadingSpinner size="sm" />}
-              {registering ? 'Registering...' : 'Register & Connect'}
+              {connecting && <LoadingSpinner size="sm" />}
+              {connecting ? 'Connecting...' : 'Connect'}
             </button>
           </div>
         </div>
 
         <p className="text-xs text-gray-400 text-center mt-4">
           Your credentials are stored securely using OS-level encryption.<br />
-          No Anthropic API key needed — AI is included with your account.
+          Sign up for an AI-powered management key at{' '}
+          <button
+            onClick={() => window.electronAPI.shell.openExternal('https://wpgoose.com/desktop-key/')}
+            className="text-primary-600 hover:text-primary-700 underline"
+          >
+            wpgoose.com/desktop-key
+          </button>
         </p>
+      </div>
       </div>
     </div>
   );

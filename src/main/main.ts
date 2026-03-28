@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, Menu, ipcMain } from 'electron';
 import * as path from 'path';
 import { registerIpcHandlers } from './ipc-handlers';
 import { registerAIHandlers } from './ai-handler';
@@ -7,13 +7,20 @@ import { createTray } from './tray';
 let mainWindow: BrowserWindow | null = null;
 
 function createWindow(): void {
+  // Remove the default menu bar
+  Menu.setApplicationMenu(null);
+
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     minWidth: 900,
     minHeight: 600,
     title: 'Goose Commerce',
-    icon: path.join(__dirname, '../../resources/icon.png'),
+    frame: false,
+    icon: path.join(
+      app.isPackaged ? process.resourcesPath : path.join(__dirname, '../..'),
+      'resources/icon.png'
+    ),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -22,6 +29,17 @@ function createWindow(): void {
     },
     show: false,
   });
+
+  // Window control handlers for custom title bar
+  ipcMain.handle('window:minimize', () => mainWindow?.minimize());
+  ipcMain.handle('window:maximize', () => {
+    if (mainWindow?.isMaximized()) {
+      mainWindow.unmaximize();
+    } else {
+      mainWindow?.maximize();
+    }
+  });
+  ipcMain.handle('window:close', () => mainWindow?.close());
 
   // Show window when ready to prevent flicker
   mainWindow.once('ready-to-show', () => {
