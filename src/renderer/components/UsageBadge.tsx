@@ -2,18 +2,18 @@ import { useEffect } from 'react';
 import { useConnectionStore } from '../stores/connectionStore';
 
 export function UsageBadge() {
-  const { gcApiKey, aiTier, aiLimits, aiUsageToday, aiUsageMonth, setAiStatus } = useConnectionStore();
+  const { licenseKey, licenseValid, aiTier, aiLimits, aiUsageToday, aiUsageMonth, setAiStatus } = useConnectionStore();
 
   useEffect(() => {
-    if (!gcApiKey) return;
-    window.electronAPI.ai.status(gcApiKey).then((status) => {
+    if (!licenseKey || !licenseValid) return;
+    window.electronAPI.ai.status(licenseKey).then((status) => {
       if (status.connected) {
         setAiStatus(status);
       }
     }).catch(() => {});
-  }, [gcApiKey]);
+  }, [licenseKey, licenseValid]);
 
-  if (!gcApiKey || !aiLimits) return null;
+  if (!licenseKey || !licenseValid || !aiLimits) return null;
 
   const todayRequests = aiUsageToday?.requests ?? 0;
   const monthRequests = aiUsageMonth?.requests ?? 0;

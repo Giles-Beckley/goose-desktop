@@ -77,16 +77,16 @@ export function useAIChat() {
     clearChat,
   } = useAIChatStore();
 
-  const { gcApiKey } = useConnectionStore();
+  const { licenseKey } = useConnectionStore();
 
   const sendMessage = useCallback(
     async (userInput: string) => {
       if (!userInput.trim() || isProcessing) return;
 
-      if (!gcApiKey) {
+      if (!licenseKey) {
         addAssistantMessage({
-          content: 'You need to register first. Go to Settings to connect your store.',
-          error: 'no_api_key',
+          content: 'You need a license key to use the AI Assistant. Add one in Settings.',
+          error: 'no_license_key',
         });
         return;
       }
@@ -108,7 +108,7 @@ export function useAIChat() {
         const conversationHistory = trimConversationHistory(rawHistory);
 
         const response = await window.electronAPI.ai.chat({
-          gcApiKey,
+          licenseKey,
           messages: conversationHistory as Array<{ role: string; content: string }>,
           systemPrompt: SYSTEM_PROMPT,
         });
@@ -150,8 +150,8 @@ export function useAIChat() {
         setProcessing(false);
       }
     },
-    [messages, isProcessing, gcApiKey]
+    [messages, isProcessing, licenseKey]
   );
 
-  return { messages, isProcessing, sendMessage, clearChat, hasApiKey: !!gcApiKey };
+  return { messages, isProcessing, sendMessage, clearChat, hasApiKey: !!licenseKey };
 }
