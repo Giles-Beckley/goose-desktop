@@ -4,6 +4,7 @@ import { useOrdersStore } from '../stores/ordersStore';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { SlideOver } from '../components/SlideOver';
 import { OrderForm } from '../components/OrderForm';
+import { Pagination } from '../components/Pagination';
 import { MCP_RESOURCES } from '../../shared/mcpTools';
 import type { Order } from '../../shared/types';
 
@@ -12,6 +13,8 @@ export function Orders() {
   const { orders, loading, error, setOrders, setLoading, setError } = useOrdersStore();
   const [filter, setFilter] = useState('all');
 
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(25);
   const [slideOpen, setSlideOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
@@ -50,6 +53,7 @@ export function Orders() {
   };
 
   const filtered = filter === 'all' ? orders : orders.filter((o) => o.status === filter);
+  const paginatedOrders = filtered.slice((page - 1) * perPage, page * perPage);
 
   return (
     <div>
@@ -82,10 +86,10 @@ export function Orders() {
 
       <div className="bg-white rounded-xl border border-goose-border">
         <div className="px-6 py-4 border-b border-goose-border flex gap-2">
-          {['all', 'processing', 'completed', 'on-hold', 'pending'].map((f) => (
+          {['all', 'pending', 'processing', 'completed', 'cancelled'].map((f) => (
             <button
               key={f}
-              onClick={() => setFilter(f)}
+              onClick={() => { setFilter(f); setPage(1); }}
               className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
                 filter === f ? 'bg-primary-100 text-primary-700' : 'bg-gray-100 text-goose-text-light hover:bg-gray-200'
               }`}
@@ -118,20 +122,20 @@ export function Orders() {
                   </td>
                 </tr>
               ) : (
-                filtered.map((o) => (
+                paginatedOrders.map((o) => (
                   <tr key={o.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => openView(o)}>
                     <td className="px-6 py-3 text-sm font-medium text-goose-text">#{o.order_number ?? o.id}</td>
                     <td className="px-6 py-3 text-sm text-goose-text-light">
-                      {o.billing ? `${o.billing.first_name} ${o.billing.last_name}` : 'Guest'}
+                      {o.customer_first_name ? `${o.customer_first_name} ${o.customer_last_name ?? ''}`.trim() : o.customer_email ?? 'Guest'}
                     </td>
                     <td className="px-6 py-3 text-sm text-goose-text-light">
-                      {new Date(o.date_created).toLocaleDateString()}
+                      {o.created_at ? new Date(o.created_at).toLocaleDateString() : '--'}
                     </td>
                     <td className="px-6 py-3">
                       <StatusBadge status={o.status} />
                     </td>
                     <td className="px-6 py-3 text-sm font-medium text-goose-text">
-                      {o.currency_symbol ?? '$'}{o.total}
+                      ${o.total_amount.toFixed(2)}
                     </td>
                   </tr>
                 ))
@@ -139,6 +143,14 @@ export function Orders() {
             </tbody>
           </table>
         </div>
+
+        <Pagination
+          currentPage={page}
+          totalItems={filtered.length}
+          perPage={perPage}
+          onPageChange={setPage}
+          onPerPageChange={setPerPage}
+        />
       </div>
 
       <SlideOver

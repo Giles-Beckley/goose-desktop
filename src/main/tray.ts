@@ -4,7 +4,10 @@ import * as path from 'path';
 let tray: Tray | null = null;
 
 export function createTray(mainWindow: BrowserWindow): void {
-  const iconPath = path.join(__dirname, '../../resources/icon.png');
+  const iconPath = path.join(
+    app.isPackaged ? process.resourcesPath : path.join(__dirname, '../..'),
+    'resources/icon.png'
+  );
 
   let trayIcon: NativeImage;
   try {

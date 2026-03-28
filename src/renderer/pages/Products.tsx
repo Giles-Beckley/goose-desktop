@@ -5,6 +5,7 @@ import { LoadingSpinner } from '../components/LoadingSpinner';
 import { SlideOver } from '../components/SlideOver';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ProductForm } from '../components/ProductForm';
+import { Pagination } from '../components/Pagination';
 import { MCP_TOOLS } from '../../shared/mcpTools';
 import type { Product } from '../../shared/types';
 
@@ -13,6 +14,8 @@ export function Products() {
   const { products, loading, error, setProducts, setLoading, setError } = useProductsStore();
   const [search, setSearch] = useState('');
 
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(25);
   const [slideOpen, setSlideOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
@@ -71,6 +74,8 @@ export function Products() {
     p.sku?.toLowerCase().includes(search.toLowerCase())
   );
 
+  const paginatedProducts = filtered.slice((page - 1) * perPage, page * perPage);
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -105,7 +110,7 @@ export function Products() {
           <input
             type="text"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             placeholder="Search products..."
             className="input"
           />
@@ -135,7 +140,7 @@ export function Products() {
                   </td>
                 </tr>
               ) : (
-                filtered.map((p) => (
+                paginatedProducts.map((p) => (
                   <tr key={p.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => openEdit(p)}>
                     <td className="px-6 py-3 text-sm font-medium text-goose-text">{p.name}</td>
                     <td className="px-6 py-3 text-sm text-goose-text-light">{p.sku || '--'}</td>
@@ -165,6 +170,14 @@ export function Products() {
             </tbody>
           </table>
         </div>
+
+        <Pagination
+          currentPage={page}
+          totalItems={filtered.length}
+          perPage={perPage}
+          onPageChange={setPage}
+          onPerPageChange={setPerPage}
+        />
       </div>
 
       <SlideOver

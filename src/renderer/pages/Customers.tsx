@@ -4,6 +4,7 @@ import { useCustomersStore } from '../stores/customersStore';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { SlideOver } from '../components/SlideOver';
 import { CustomerForm } from '../components/CustomerForm';
+import { Pagination } from '../components/Pagination';
 import { MCP_TOOLS } from '../../shared/mcpTools';
 import type { Customer } from '../../shared/types';
 
@@ -12,6 +13,8 @@ export function Customers() {
   const { customers, loading, error, setCustomers, setLoading, setError } = useCustomersStore();
   const [search, setSearch] = useState('');
 
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(25);
   const [slideOpen, setSlideOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
@@ -19,7 +22,7 @@ export function Customers() {
     setLoading(true);
     setError(null);
     try {
-      const result = await callTool(MCP_TOOLS.LIST_CUSTOMERS, { limit: 100 });
+      const result = await callTool(MCP_TOOLS.LIST_CUSTOMERS, { limit: 100, sort_by: 'created_at', sort_order: 'desc' });
       if (result) {
         const text = result.content?.[0]?.text;
         if (text) {
@@ -53,6 +56,8 @@ export function Customers() {
     `${c.first_name} ${c.last_name}`.toLowerCase().includes(search.toLowerCase()) ||
     c.email?.toLowerCase().includes(search.toLowerCase())
   );
+
+  const paginatedCustomers = filtered.slice((page - 1) * perPage, page * perPage);
 
   return (
     <div>
@@ -88,7 +93,7 @@ export function Customers() {
           <input
             type="text"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             placeholder="Search customers..."
             className="input"
           />
@@ -117,16 +122,16 @@ export function Customers() {
                   </td>
                 </tr>
               ) : (
-                filtered.map((c) => (
+                paginatedCustomers.map((c) => (
                   <tr key={c.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => openEdit(c)}>
                     <td className="px-6 py-3 text-sm font-medium text-goose-text">
                       {c.first_name} {c.last_name}
                     </td>
                     <td className="px-6 py-3 text-sm text-goose-text-light">{c.email}</td>
-                    <td className="px-6 py-3 text-sm text-goose-text-light">{c.orders_count ?? 0}</td>
-                    <td className="px-6 py-3 text-sm font-medium text-goose-text">${c.total_spent ?? '0.00'}</td>
+                    <td className="px-6 py-3 text-sm text-goose-text-light">{c.total_orders ?? 0}</td>
+                    <td className="px-6 py-3 text-sm font-medium text-goose-text">${(c.total_spent ?? 0).toFixed(2)}</td>
                     <td className="px-6 py-3 text-sm text-goose-text-light">
-                      {c.date_created ? new Date(c.date_created).toLocaleDateString() : '--'}
+                      {c.created_at ? new Date(c.created_at).toLocaleDateString() : '--'}
                     </td>
                   </tr>
                 ))
@@ -134,6 +139,14 @@ export function Customers() {
             </tbody>
           </table>
         </div>
+
+        <Pagination
+          currentPage={page}
+          totalItems={filtered.length}
+          perPage={perPage}
+          onPageChange={setPage}
+          onPerPageChange={setPerPage}
+        />
       </div>
 
       <SlideOver

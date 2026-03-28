@@ -6,10 +6,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('credentials:save', credentials),
     load: () => ipcRenderer.invoke('credentials:load'),
     clear: () => ipcRenderer.invoke('credentials:clear'),
-    saveGCApiKey: (key: string) =>
-      ipcRenderer.invoke('credentials:save-gc-api-key', key),
-    getGCApiKey: () =>
-      ipcRenderer.invoke('credentials:get-gc-api-key'),
   },
   mcp: {
     request: (siteUrl: string, apiKey: string, body: unknown) =>
@@ -18,15 +14,48 @@ contextBridge.exposeInMainWorld('electronAPI', {
   ai: {
     chat: (payload: unknown) =>
       ipcRenderer.invoke('ai:chat', payload),
-    status: (gcApiKey: string) =>
-      ipcRenderer.invoke('ai:status', gcApiKey),
-    usage: (gcApiKey: string) =>
-      ipcRenderer.invoke('ai:usage', gcApiKey),
-    register: (payload: unknown) =>
-      ipcRenderer.invoke('ai:register', payload),
+    status: (licenseKey: string) =>
+      ipcRenderer.invoke('ai:status', licenseKey),
+    usage: (licenseKey: string) =>
+      ipcRenderer.invoke('ai:usage', licenseKey),
+    updateMcp: (payload: { licenseKey: string; siteUrl: string; mcpApiKey: string }) =>
+      ipcRenderer.invoke('ai:update-mcp', payload),
+  },
+  shell: {
+    openExternal: (url: string) =>
+      ipcRenderer.invoke('shell:open-external', url),
+  },
+  dialog: {
+    saveFile: (filename: string, base64Content: string) =>
+      ipcRenderer.invoke('dialog:save-file', filename, base64Content),
+    pickImage: () =>
+      ipcRenderer.invoke('dialog:pick-image') as Promise<{ filePath: string; base64: string; filename: string; mime: string } | null>,
+  },
+  media: {
+    uploadLocal: (payload: { siteUrl: string; apiKey: string; base64: string; filename: string; mime: string }) =>
+      ipcRenderer.invoke('media:upload-local', payload) as Promise<{ success: boolean; attachment_id?: number; url?: string; error?: string }>,
   },
   notifications: {
     send: (title: string, body: string) =>
       ipcRenderer.invoke('notifications:send', title, body),
+  },
+  window: {
+    minimize: () => ipcRenderer.invoke('window:minimize'),
+    maximize: () => ipcRenderer.invoke('window:maximize'),
+    close: () => ipcRenderer.invoke('window:close'),
+  },
+  license: {
+    saveKey: (licenseKey: string) =>
+      ipcRenderer.invoke('license:save-key', licenseKey),
+    getKey: () =>
+      ipcRenderer.invoke('license:get-key'),
+    clearKey: () =>
+      ipcRenderer.invoke('license:clear-key'),
+    validate: (licenseKey: string, siteUrl: string) =>
+      ipcRenderer.invoke('license:validate', licenseKey, siteUrl),
+    status: (licenseKey: string) =>
+      ipcRenderer.invoke('license:status', licenseKey),
+    deactivate: (licenseKey: string, siteUrl: string) =>
+      ipcRenderer.invoke('license:deactivate', licenseKey, siteUrl),
   },
 });

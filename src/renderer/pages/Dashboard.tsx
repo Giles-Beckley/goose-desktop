@@ -35,17 +35,19 @@ export function Dashboard() {
           try {
             const data = JSON.parse(text);
             const orders = Array.isArray(data) ? data : data.orders ?? [];
-            setTotalOrders(String(data.total ?? orders.length));
+            setTotalOrders(String(data.count ?? orders.length));
 
-            const totalRev = orders.reduce((sum: number, o: { total?: string }) => sum + parseFloat(o.total ?? '0'), 0);
+            const totalRev = orders.reduce((sum: number, o: { total_amount: number }) => sum + o.total_amount, 0);
             setRevenue(`$${totalRev.toFixed(2)}`);
 
             setRecentOrders(
-              orders.slice(0, 5).map((o: { id: number; total: string; status: string; billing?: { first_name?: string; last_name?: string } }) => ({
+              orders.slice(0, 5).map((o: { id: number; total_amount: number; status: string; customer_first_name?: string; customer_last_name?: string; customer_email?: string }) => ({
                 id: o.id,
-                total: o.total,
+                total: o.total_amount.toFixed(2),
                 status: o.status,
-                customer: o.billing ? `${o.billing.first_name ?? ''} ${o.billing.last_name ?? ''}`.trim() : 'Guest',
+                customer: o.customer_first_name
+                  ? `${o.customer_first_name} ${o.customer_last_name ?? ''}`.trim()
+                  : o.customer_email ?? 'Guest',
               }))
             );
           } catch { /* non-JSON response */ }
