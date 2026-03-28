@@ -1,40 +1,25 @@
 appId: com.wpgoose.desktop
 productName: Goose Commerce
+asar: true
 directories:
   buildResources: resources
   output: release
 files:
-  - dist/**/*
-  - resources/**/*
+  - "dist"
+  - "!dist/**/*.map"
+  - "!**/{.DS_Store,.git,.gitignore}"
+extraResources:
+  - from: resources/
+    to: resources/
+    filter:
+      - "icon.png"
 win:
+  icon: resources/icon.ico
   target:
     - target: nsis
       arch:
         - x64
-  icon: resources/icon.png
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
-  installerIcon: resources/icon.png
-  uninstallerIcon: resources/icon.png
-  installerHeaderIcon: resources/icon.png
-mac:
-  target:
-    - target: dmg
-      arch:
-        - x64
-        - arm64
-  icon: resources/icon.png
-  category: public.app-category.business
-dmg:
-  contents:
-    - x: 130
-      y: 220
-    - x: 410
-      y: 220
-      type: link
-      path: /Applications
-publish:
-  provider: github
-  owner: your-github-username
-  repo: goose-commerce-desktop
+  include: resources/installer.nsh
