@@ -77,12 +77,11 @@ export function MessageBubble({ message }: { message: ChatMessage }) {
           )}
         </div>
 
-        {!message.isLoading && (message.model || message.tier) && (
+        {!message.isLoading && (message.tier || message.usage) && (
           <div className="flex items-center gap-2 mt-1 px-1">
             <span className="text-[10px] text-gray-400">
-              {message.model && formatModel(message.model)}
               {message.tier && (
-                <span className="ml-1 px-1.5 py-0.5 bg-gray-100 rounded text-[9px] font-medium text-gray-500">
+                <span className="px-1.5 py-0.5 bg-gray-100 rounded text-[9px] font-medium text-gray-500">
                   {message.tier}
                 </span>
               )}
@@ -111,9 +110,3 @@ function LoadingDots() {
   );
 }
 
-function formatModel(model: string): string {
-  if (model.includes('sonnet')) return 'Sonnet 4.5';
-  if (model.includes('opus')) return 'Opus 4.6';
-  if (model.includes('haiku')) return 'Haiku 4.5';
-  return model;
-}
