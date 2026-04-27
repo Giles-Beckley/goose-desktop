@@ -1,17 +1,22 @@
 import { NavLink } from 'react-router-dom';
+import { useConnectionStore } from '../stores/connectionStore';
 
 const navItems = [
-  { to: '/', label: 'Dashboard', icon: DashboardIcon },
-  { to: '/assistant', label: 'Assistant', icon: AssistantIcon },
-  { to: '/products', label: 'Products', icon: ProductsIcon },
-  { to: '/orders', label: 'Orders', icon: OrdersIcon },
-  { to: '/customers', label: 'Customers', icon: CustomersIcon },
-  { to: '/settings', label: 'Settings', icon: SettingsIcon },
+  { to: '/', label: 'Dashboard', icon: DashboardIcon, requiresLicense: false },
+  { to: '/assistant', label: 'Assistant', icon: AssistantIcon, requiresLicense: true },
+  { to: '/products', label: 'Products', icon: ProductsIcon, requiresLicense: false },
+  { to: '/orders', label: 'Orders', icon: OrdersIcon, requiresLicense: false },
+  { to: '/customers', label: 'Customers', icon: CustomersIcon, requiresLicense: false },
+  { to: '/exports', label: 'Exports', icon: ExportsIcon, requiresLicense: false },
+  { to: '/discounts', label: 'Discounts', icon: DiscountsIcon, requiresLicense: false },
+  { to: '/settings', label: 'Settings', icon: SettingsIcon, requiresLicense: false },
 ];
 
 export function Sidebar() {
+  const { licenseValid } = useConnectionStore();
+
   return (
-    <aside className="w-60 flex flex-col min-h-screen" style={{ backgroundColor: '#1E293B' }}>
+    <aside className="w-60 flex flex-col h-full" style={{ backgroundColor: '#1E293B' }}>
       <div className="px-5 py-5 border-b border-white/10">
         <h1 className="text-lg font-display font-bold tracking-tight" style={{ color: '#FFCC00' }}>Goose Commerce</h1>
         <p className="text-xs text-white/50 mt-0.5">Desktop Manager</p>
@@ -19,29 +24,47 @@ export function Sidebar() {
 
       <nav className="flex-1 py-4">
         <ul className="space-y-0.5 px-3">
-          {navItems.map((item) => (
-            <li key={item.to}>
-              <NavLink
-                to={item.to}
-                end={item.to === '/'}
-                className={({ isActive }) =>
-                  `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                    isActive
-                      ? 'bg-primary-600 text-white shadow-sm'
-                      : 'text-white/70 hover:bg-white/8 hover:text-white'
-                  }`
-                }
-              >
-                <item.icon />
-                {item.label}
-              </NavLink>
-            </li>
-          ))}
+          {navItems.map((item) => {
+            const disabled = item.requiresLicense && !licenseValid;
+
+            if (disabled) {
+              return (
+                <li key={item.to}>
+                  <NavLink
+                    to={item.to}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-white/30 cursor-default"
+                  >
+                    <item.icon />
+                    {item.label}
+                  </NavLink>
+                </li>
+              );
+            }
+
+            return (
+              <li key={item.to}>
+                <NavLink
+                  to={item.to}
+                  end={item.to === '/'}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                      isActive
+                        ? 'bg-primary-600 text-white shadow-sm'
+                        : 'text-white/70 hover:bg-white/8 hover:text-white'
+                    }`
+                  }
+                >
+                  <item.icon />
+                  {item.label}
+                </NavLink>
+              </li>
+            );
+          })}
         </ul>
       </nav>
 
       <div className="px-5 py-4 border-t border-white/10">
-        <p className="text-xs text-white/30">v1.0.0</p>
+        <p className="text-xs text-white/30">v1.1.0</p>
       </div>
     </aside>
   );
@@ -83,6 +106,22 @@ function CustomersIcon() {
   return (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+    </svg>
+  );
+}
+
+function ExportsIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    </svg>
+  );
+}
+
+function DiscountsIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
     </svg>
   );
 }
