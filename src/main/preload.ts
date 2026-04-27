@@ -46,6 +46,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
     maximize: () => ipcRenderer.invoke('window:maximize'),
     close: () => ipcRenderer.invoke('window:close'),
   },
+  updater: {
+    check: () => ipcRenderer.invoke('updater:check'),
+    download: () => ipcRenderer.invoke('updater:download'),
+    install: () => ipcRenderer.invoke('updater:install'),
+    getStatus: () => ipcRenderer.invoke('updater:get-status'),
+    onStatus: (cb: (status: unknown) => void) => {
+      const listener = (_event: unknown, status: unknown) => cb(status);
+      ipcRenderer.on('updater:status', listener as any);
+      return () => ipcRenderer.removeListener('updater:status', listener as any);
+    },
+  },
   license: {
     saveKey: (licenseKey: string) =>
       ipcRenderer.invoke('license:save-key', licenseKey),

@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react';
 import { useConnectionStore } from '../stores/connectionStore';
 import { useMcp } from '../hooks/useMcp';
 import { LoadingSpinner } from '../components/LoadingSpinner';
+import type { UpdaterStatus } from '../../shared/types';
 
 export function Settings() {
   const {
     siteUrl, apiKey, status,
-    aiConnected, aiTier, aiEmail, aiAllowedModels, aiDefaultModel,
+    aiConnected, aiTier, aiEmail,
     aiLimits, aiUsageToday, aiUsageMonth,
     licenseKey, licenseValid, licensePlanTier, licenseStatus, licenseExpiresAt, licenseEmail,
     setCredentials, clearCredentials, setOnboarded,
@@ -20,7 +21,6 @@ export function Settings() {
   const [message, setMessage] = useState('');
 
   // AI settings
-  const [selectedModel, setSelectedModel] = useState(aiDefaultModel);
   const [testingAi, setTestingAi] = useState(false);
   const [aiMessage, setAiMessage] = useState('');
 
@@ -37,7 +37,6 @@ export function Settings() {
         const statusResp = await window.electronAPI.ai.status(licenseKey);
         if (statusResp.connected) {
           setAiStatus(statusResp);
-          setSelectedModel(statusResp.default_model);
         }
       } catch { /* ignore */ }
     }
@@ -292,25 +291,6 @@ export function Settings() {
                     </div>
                   )}
 
-                  {/* Model selection */}
-                  {aiAllowedModels.length > 0 && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">AI Model</label>
-                      <select
-                        value={selectedModel}
-                        onChange={(e) => setSelectedModel(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white"
-                      >
-                        {aiAllowedModels.map((m) => (
-                          <option key={m} value={m}>{formatModelLabel(m)}</option>
-                        ))}
-                      </select>
-                      {aiAllowedModels.length === 1 && (
-                        <p className="text-xs text-gray-400 mt-1">Upgrade your plan for access to more models.</p>
-                      )}
-                    </div>
-                  )}
-
                   {aiMessage && (
                     <p className={`text-sm ${aiMessage.includes('active') ? 'text-green-600' : 'text-red-600'}`}>
                       {aiMessage}
@@ -364,10 +344,13 @@ export function Settings() {
           </div>
         </div>
 
+        {/* Updates */}
+        <UpdatesSection />
+
         {/* About */}
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-2">About</h2>
-          <p className="text-sm text-gray-600">Goose Commerce Desktop v1.0.0</p>
+          <p className="text-sm text-gray-600">Goose Commerce Desktop v{__APP_VERSION__}</p>
           <p className="text-sm text-gray-500 mt-1">A desktop client for managing your Goose Commerce store.</p>
         </div>
       </div>
@@ -375,9 +358,108 @@ export function Settings() {
   );
 }
 
-function formatModelLabel(model: string): string {
-  if (model.includes('haiku')) return 'Claude Haiku 4.5 (Fastest)';
-  if (model.includes('sonnet')) return 'Claude Sonnet 4.5 (Recommended)';
-  if (model.includes('opus')) return 'Claude Opus 4.6 (Most capable)';
-  return model;
+function UpdatesSection() {
+  const [status, setStatus] = useState<UpdaterStatus>({ state: 'idle', currentVersion: __APP_VERSION__ });
+  const [checking, setChecking] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    // Pull whatever the main process already knows (e.g. from auto-check on launch)
+    window.electronAPI.updater.getStatus().then((s) => {
+      if (mounted && s) setStatus(s);
+    });
+    const unsubscribe = window.electronAPI.updater.onStatus((s) => {
+      if (mounted) setStatus(s);
+    });
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
+  }, []);
+
+  const handleCheck = async () => {
+    setChecking(true);
+    try {
+      await window.electronAPI.updater.check();
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const handleDownload = () => window.electronAPI.updater.download();
+  const handleInstall = () => window.electronAPI.updater.install();
+
+  const renderState = () => {
+    switch (status.state) {
+      case 'checking':
+        return <p className="text-sm text-gray-500 flex items-center gap-2"><LoadingSpinner size="sm" />Checking for updates...</p>;
+      case 'available':
+        return (
+          <div className="space-y-3">
+            <p className="text-sm text-primary-700">
+              Version <strong>{status.version}</strong> is available (you have {status.currentVersion}).
+            </p>
+            <button
+              onClick={handleDownload}
+              className="px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors"
+            >
+              Download update
+            </button>
+          </div>
+        );
+      case 'downloading': {
+        const pct = status.progressPct ?? 0;
+        return (
+          <div className="space-y-2">
+            <p className="text-sm text-gray-600">Downloading update... {pct}%</p>
+            <div className="w-full bg-gray-100 rounded-full h-2">
+              <div className="h-2 rounded-full bg-primary-500 transition-all" style={{ width: `${pct}%` }} />
+            </div>
+          </div>
+        );
+      }
+      case 'downloaded':
+        return (
+          <div className="space-y-3">
+            <p className="text-sm text-green-700">
+              Update <strong>{status.version}</strong> downloaded. Restart to install.
+            </p>
+            <button
+              onClick={handleInstall}
+              className="px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors"
+            >
+              Restart and install
+            </button>
+          </div>
+        );
+      case 'not-available':
+        return <p className="text-sm text-green-700">You're on the latest version.</p>;
+      case 'error':
+        return <p className="text-sm text-red-600">Update check failed: {status.error ?? 'Unknown error'}</p>;
+      default:
+        return <p className="text-sm text-gray-500">Click below to check for updates.</p>;
+    }
+  };
+
+  const showCheckButton = status.state === 'idle' || status.state === 'not-available' || status.state === 'error';
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <h2 className="text-lg font-semibold text-gray-900 mb-3">Updates</h2>
+      <div className="space-y-3">
+        {renderState()}
+        {showCheckButton && (
+          <button
+            onClick={handleCheck}
+            disabled={checking}
+            className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 flex items-center gap-2"
+          >
+            {checking && <LoadingSpinner size="sm" />}
+            Check for updates
+          </button>
+        )}
+      </div>
+    </div>
+  );
 }
+

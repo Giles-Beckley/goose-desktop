@@ -2,6 +2,7 @@ import { app, BrowserWindow, Menu, ipcMain } from 'electron';
 import * as path from 'path';
 import { registerIpcHandlers } from './ipc-handlers';
 import { registerAIHandlers } from './ai-handler';
+import { registerUpdateHandlers, checkForUpdatesQuiet } from './updater';
 import { createTray } from './tray';
 
 let mainWindow: BrowserWindow | null = null;
@@ -44,6 +45,8 @@ function createWindow(): void {
   // Show window when ready to prevent flicker
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show();
+    // Trigger a silent update check ~5s after the window is ready (packaged builds only)
+    setTimeout(() => checkForUpdatesQuiet(), 5000);
   });
 
   // Load the app — use app.isPackaged to detect dev vs production
@@ -72,6 +75,7 @@ app.whenReady().then(() => {
   registerIpcHandlers();
   registerAIHandlers();
   createWindow();
+  registerUpdateHandlers(mainWindow);
 
   if (mainWindow) {
     createTray(mainWindow);

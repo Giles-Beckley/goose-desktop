@@ -125,6 +125,25 @@ export interface LicenseStatusResponse {
   message?: string;
 }
 
+// === UPDATER TYPES ===
+
+export type UpdaterState =
+  | 'idle'
+  | 'checking'
+  | 'available'
+  | 'not-available'
+  | 'downloading'
+  | 'downloaded'
+  | 'error';
+
+export interface UpdaterStatus {
+  state: UpdaterState;
+  version?: string;
+  currentVersion: string;
+  progressPct?: number;
+  error?: string;
+}
+
 // IPC API exposed to renderer via contextBridge
 export interface ElectronAPI {
   credentials: {
@@ -165,6 +184,13 @@ export interface ElectronAPI {
     minimize: () => Promise<void>;
     maximize: () => Promise<void>;
     close: () => Promise<void>;
+  };
+  updater: {
+    check: () => Promise<{ available: boolean; version?: string; currentVersion: string; error?: string }>;
+    download: () => Promise<void>;
+    install: () => Promise<void>;
+    getStatus: () => Promise<UpdaterStatus>;
+    onStatus: (cb: (status: UpdaterStatus) => void) => () => void;
   };
   license: {
     saveKey: (licenseKey: string) => Promise<boolean>;
