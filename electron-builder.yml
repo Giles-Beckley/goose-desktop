@@ -27,4 +27,4 @@ publish:
   provider: github
   owner: Giles-Beckley
   repo: goose-desktop
-  releaseType: release
+  releaseType: draft
