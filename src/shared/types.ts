@@ -152,6 +152,7 @@ export interface ElectronAPI {
   dialog: {
     saveFile: (filename: string, base64Content: string) => Promise<boolean>;
     pickImage: () => Promise<{ filePath: string; base64: string; filename: string; mime: string } | null>;
+    pickFile: () => Promise<{ filePath: string; base64: string; filename: string; mime: string; size: number } | null>;
   };
   media: {
     uploadLocal: (payload: { siteUrl: string; apiKey: string; base64: string; filename: string; mime: string }) =>

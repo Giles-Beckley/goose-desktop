@@ -122,6 +122,51 @@ export function registerIpcHandlers(): void {
     return true;
   });
 
+  // Open file picker for any file (documents, archives, etc.)
+  ipcMain.handle('dialog:pick-file', async () => {
+    const win = BrowserWindow.getFocusedWindow();
+    const result = await dialog.showOpenDialog(win!, {
+      properties: ['openFile'],
+      filters: [
+        { name: 'Documents', extensions: ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp', 'rtf', 'txt', 'csv'] },
+        { name: 'Archives', extensions: ['zip', 'tar', 'gz', '7z'] },
+        { name: 'CAD / 3D', extensions: ['dwg', 'dxf', 'stl', 'step', 'stp', 'iges', 'igs'] },
+        { name: 'All Files', extensions: ['*'] },
+      ],
+    });
+    if (result.canceled || result.filePaths.length === 0) return null;
+
+    const filePath = result.filePaths[0];
+    const buffer = fs.readFileSync(filePath);
+    const base64 = buffer.toString('base64');
+    const filename = path.basename(filePath);
+    const ext = path.extname(filePath).toLowerCase().replace('.', '');
+    const mimeMap: Record<string, string> = {
+      pdf: 'application/pdf',
+      doc: 'application/msword',
+      docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      xls: 'application/vnd.ms-excel',
+      xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      ppt: 'application/vnd.ms-powerpoint',
+      pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      odt: 'application/vnd.oasis.opendocument.text',
+      ods: 'application/vnd.oasis.opendocument.spreadsheet',
+      odp: 'application/vnd.oasis.opendocument.presentation',
+      rtf: 'application/rtf',
+      txt: 'text/plain',
+      csv: 'text/csv',
+      zip: 'application/zip',
+      tar: 'application/x-tar',
+      gz: 'application/gzip',
+      '7z': 'application/x-7z-compressed',
+      jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+      gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml',
+    };
+    const mime = mimeMap[ext] || 'application/octet-stream';
+
+    return { filePath, base64, filename, mime, size: buffer.length };
+  });
+
   // Open file picker for images — returns { filePath, base64, filename } or null
   ipcMain.handle('dialog:pick-image', async () => {
     const win = BrowserWindow.getFocusedWindow();

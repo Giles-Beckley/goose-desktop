@@ -51,6 +51,21 @@ export function ProductForm({ product, onClose, onSaved }: ProductFormProps) {
   const [loadingVariations, setLoadingVariations] = useState(false);
   const [stockMode, setStockMode] = useState<'parent' | 'variation'>('variation');
 
+  // Documents (edit mode)
+  interface ProductDocument {
+    id: number;
+    name: string;
+    file_url: string;
+    file_type: string;
+    file_size: number;
+    file_size_formatted?: string;
+    description?: string;
+    display_order?: number;
+  }
+  const [documents, setDocuments] = useState<ProductDocument[]>([]);
+  const [loadingDocuments, setLoadingDocuments] = useState(false);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+
   // Images (edit mode)
   const [productImageUrl, setProductImageUrl] = useState(product?.image_url ?? '');
   const [galleryImages, setGalleryImages] = useState<Array<{ id: number; url: string }>>([]);
@@ -61,16 +76,17 @@ export function ProductForm({ product, onClose, onSaved }: ProductFormProps) {
   const [uploading, setUploading] = useState(false);
 
   // UI state
-  const [activeTab, setActiveTab] = useState<'general' | 'categories' | 'attributes' | 'variations' | 'images'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'categories' | 'attributes' | 'variations' | 'images' | 'documents'>('general');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load product types, categories, tags, attributes, variations on mount
+  // Load product types, categories, tags, attributes, variations, documents on mount
   useEffect(() => {
     loadProductTypes();
     loadTaxonomies();
     loadAttributes();
     loadVariations();
+    if (isEdit) loadDocuments();
   }, []);
 
   const loadProductTypes = async () => {
@@ -151,6 +167,97 @@ export function ProductForm({ product, onClose, onSaved }: ProductFormProps) {
     } finally {
       setLoadingAttributes(false);
     }
+  };
+
+  const loadDocuments = async () => {
+    if (!product) return;
+    setLoadingDocuments(true);
+    try {
+      const result = await callTool(MCP_TOOLS.GET_PRODUCT_DOCUMENTS, { product_id: product.id });
+      if (result?.content?.[0]?.text) {
+        const data = JSON.parse(result.content[0].text);
+        setDocuments(data.documents ?? []);
+      }
+    } catch (err) {
+      console.error('Failed to load documents:', err);
+    } finally {
+      setLoadingDocuments(false);
+    }
+  };
+
+  const handleAddDocument = async () => {
+    if (!product) return;
+    const picked = await window.electronAPI.dialog.pickFile();
+    if (!picked) return;
+
+    setUploadingDoc(true);
+    setError(null);
+    try {
+      // Upload file to media library
+      const uploadResult = await callTool(MCP_TOOLS.UPLOAD_FILE_BASE64, {
+        data: picked.base64,
+        filename: picked.filename,
+        mime: picked.mime,
+        title: picked.filename,
+      });
+
+      if (uploadResult?.content?.[0]?.text) {
+        const data = JSON.parse(uploadResult.content[0].text);
+        if (!data.success || !data.attachment_id) {
+          setError(data.error ?? 'Failed to upload file');
+          return;
+        }
+
+        // Attach to product
+        const attachResult = await callTool(MCP_TOOLS.ADD_PRODUCT_DOCUMENT, {
+          product_id: product.id,
+          attachment_id: data.attachment_id,
+          name: picked.filename,
+        });
+
+        if (attachResult?.content?.[0]?.text) {
+          const attachData = JSON.parse(attachResult.content[0].text);
+          if (!attachData.success) {
+            setError(attachData.error ?? 'Failed to attach document to product');
+            return;
+          }
+        }
+
+        loadDocuments();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to add document');
+    } finally {
+      setUploadingDoc(false);
+    }
+  };
+
+  const handleDeleteDocument = async (documentId: number) => {
+    setSaving(true);
+    setError(null);
+    try {
+      const result = await callTool(MCP_TOOLS.DELETE_PRODUCT_DOCUMENT, { document_id: documentId });
+      if (result?.content?.[0]?.text) {
+        const data = JSON.parse(result.content[0].text);
+        if (!data.success) {
+          setError(data.error ?? 'Failed to delete document');
+          return;
+        }
+      }
+      loadDocuments();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete document');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const formatBytes = (bytes: number): string => {
+    if (!bytes || bytes < 0) return '—';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
   };
 
   const loadVariations = async () => {
@@ -447,6 +554,7 @@ export function ProductForm({ product, onClose, onSaved }: ProductFormProps) {
     { key: 'attributes' as const, label: 'Attributes' },
     ...(isEdit ? [
       { key: 'images' as const, label: 'Images' },
+      { key: 'documents' as const, label: 'Documents' },
       { key: 'variations' as const, label: 'Variations' },
     ] : []),
   ];
@@ -800,6 +908,83 @@ export function ProductForm({ product, onClose, onSaved }: ProductFormProps) {
                   ))}
                 </div>
               ) : null}
+            </div>
+          </>
+        )}
+
+        {/* ── Documents tab (edit mode only) ── */}
+        {activeTab === 'documents' && isEdit && (
+          <>
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-medium text-goose-text">Product Documents</h3>
+                <button
+                  type="button"
+                  onClick={handleAddDocument}
+                  disabled={uploadingDoc}
+                  className="px-3 py-1.5 text-xs font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {uploadingDoc ? <LoadingSpinner size="sm" /> : (
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                  )}
+                  Add Document
+                </button>
+              </div>
+
+              <p className="text-xs text-goose-text-light mb-3">
+                Attach manuals, safety sheets, CAD files, or other documents to this product. Files are uploaded to your WordPress media library.
+              </p>
+
+              {loadingDocuments ? (
+                <div className="flex justify-center py-6"><LoadingSpinner /></div>
+              ) : documents.length === 0 ? (
+                <div className="text-center py-8 text-sm text-goose-text-light border border-dashed border-goose-border rounded-lg">
+                  No documents attached. Click <strong>Add Document</strong> to upload one.
+                </div>
+              ) : (
+                <div className="border border-goose-border rounded-lg divide-y divide-goose-border">
+                  {documents.map(doc => (
+                    <div key={doc.id} className="flex items-center gap-3 px-4 py-3">
+                      <svg className="w-8 h-8 text-goose-text-light shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-goose-text truncate">{doc.name}</p>
+                        <p className="text-xs text-goose-text-light">
+                          {doc.file_size_formatted ?? formatBytes(doc.file_size)}
+                          {doc.file_type ? ` · ${doc.file_type}` : ''}
+                        </p>
+                        {doc.description && (
+                          <p className="text-xs text-goose-text-light mt-0.5 truncate">{doc.description}</p>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => window.electronAPI.shell.openExternal(doc.file_url)}
+                        className="p-1.5 text-goose-text-light hover:text-primary-600 transition-colors"
+                        title="Open"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteDocument(doc.id)}
+                        disabled={saving}
+                        className="p-1.5 text-goose-text-light hover:text-red-600 transition-colors disabled:opacity-50"
+                        title="Delete"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </>
         )}

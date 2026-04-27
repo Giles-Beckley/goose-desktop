@@ -3,33 +3,37 @@ import { useMcp } from '../hooks/useMcp';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { SlideOver } from '../components/SlideOver';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { MCP_TOOLS } from '../../shared/mcpTools';
+import { MCP_TOOLS, MCP_RESOURCES } from '../../shared/mcpTools';
+
+type DiscountType = 'percentage' | 'fixed_amount' | 'voucher';
 
 interface Discount {
   id: number;
   code: string;
-  type: 'percentage' | 'fixed' | 'voucher';
-  value: number;
+  name?: string;
+  description?: string;
+  discount_type: DiscountType;
+  amount: number;
   usage_count?: number;
-  usage_limit?: number;
-  usage_limit_per_user?: number;
-  minimum_amount?: number;
-  maximum_discount?: number;
+  usage_limit?: number | null;
+  usage_limit_per_user?: number | null;
+  minimum_order_amount?: number | null;
+  maximum_discount_amount?: number | null;
   free_shipping?: boolean;
-  single_use?: boolean;
-  valid_from?: string;
-  valid_until?: string;
+  single_use_voucher?: boolean;
+  valid_from?: string | null;
+  valid_to?: string | null;
   status?: string;
   remaining_balance?: number;
   created_at?: string;
 }
 
 export function Discounts() {
-  const { callTool } = useMcp();
+  const { callTool, readResource } = useMcp();
   const [discounts, setDiscounts] = useState<Discount[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<'all' | 'percentage' | 'fixed' | 'voucher'>('all');
+  const [filter, setFilter] = useState<'all' | DiscountType>('all');
 
   const [slideOpen, setSlideOpen] = useState(false);
   const [selectedDiscount, setSelectedDiscount] = useState<Discount | null>(null);
@@ -53,11 +57,16 @@ export function Discounts() {
     setLoading(true);
     setError(null);
     try {
-      // There's no list_discounts tool, so we'll use validate to check individual codes
-      // For now, we search via the available tools
-      // The MCP server doesn't expose a list endpoint — we'll note this limitation
-      // and fetch what we can
-      setDiscounts([]);
+      const result = await readResource(MCP_RESOURCES.DISCOUNTS);
+      if (result?.content?.[0]?.text) {
+        const data = JSON.parse(result.content[0].text);
+        if (data.error) {
+          setError(data.error);
+          setDiscounts([]);
+        } else {
+          setDiscounts(data.discounts ?? []);
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch discounts');
     } finally {
@@ -73,7 +82,7 @@ export function Discounts() {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      await callTool(MCP_TOOLS.DELETE_DISCOUNT, { discount_id: deleteTarget.id });
+      await callTool(MCP_TOOLS.DELETE_DISCOUNT, { id: deleteTarget.id });
       setDeleteTarget(null);
       syncDiscounts();
     } catch (err) {
@@ -83,21 +92,32 @@ export function Discounts() {
     }
   };
 
+  const openEdit = (d: Discount) => {
+    setSelectedDiscount(d);
+    setSlideOpen(true);
+  };
+
+  const openCreate = () => {
+    setSelectedDiscount(null);
+    setSlideOpen(true);
+  };
+
   const handleValidate = async () => {
-    if (!validateCode.trim()) return;
+    if (!validateCode.trim() || !validateTotal) return;
     setValidating(true);
     setValidateResult(null);
     try {
       const result = await callTool(MCP_TOOLS.VALIDATE_DISCOUNT_CODE, {
         code: validateCode.trim(),
-        ...(validateTotal ? { cart_total: parseFloat(validateTotal) } : {}),
+        cart_total: parseFloat(validateTotal),
       });
       if (result?.content?.[0]?.text) {
         const data = JSON.parse(result.content[0].text);
         if (data.valid) {
-          setValidateResult(`Valid! Discount: ${data.discount_type === 'percentage' ? `${data.discount_value}%` : `$${data.discount_value}`}${data.calculated_discount ? ` (saves $${data.calculated_discount})` : ''}`);
+          const amount = Number(data.discount_amount ?? 0).toFixed(2);
+          setValidateResult(`Valid! ${data.discount_type === 'percentage' ? 'Percentage' : 'Fixed'} discount — saves $${amount}. ${data.message ?? ''}`);
         } else {
-          setValidateResult(`Invalid: ${data.reason ?? 'Code not found or expired'}`);
+          setValidateResult(`Invalid: ${data.error ?? 'Code not found or expired'}`);
         }
       }
     } catch (err) {
@@ -143,7 +163,7 @@ export function Discounts() {
         <h1 className="text-2xl font-display font-bold text-goose-text">Discounts & Vouchers</h1>
         <div className="flex gap-2">
           <button
-            onClick={() => { setSelectedDiscount(null); setSlideOpen(true); }}
+            onClick={openCreate}
             className="px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -181,12 +201,12 @@ export function Discounts() {
             min="0"
             value={validateTotal}
             onChange={(e) => setValidateTotal(e.target.value)}
-            placeholder="Cart total (optional)"
+            placeholder="Cart total"
             className="input w-40"
           />
           <button
             onClick={handleValidate}
-            disabled={validating || !validateCode.trim()}
+            disabled={validating || !validateCode.trim() || !validateTotal}
             className="px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center gap-2"
           >
             {validating && <LoadingSpinner size="sm" />}
@@ -203,13 +223,94 @@ export function Discounts() {
       {/* Check voucher balance */}
       <VoucherBalanceCheck />
 
-      {/* Create discount slide-over */}
+      {/* Discount list */}
+      <div className="bg-white rounded-xl border border-goose-border mb-6">
+        <div className="px-6 py-4 border-b border-goose-border flex items-center gap-2">
+          <h2 className="text-sm font-medium text-goose-text mr-2">All Discounts</h2>
+          {(['all', 'percentage', 'fixed_amount', 'voucher'] as const).map(f => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
+                filter === f ? 'bg-primary-100 text-primary-700' : 'bg-gray-100 text-goose-text-light hover:bg-gray-200'
+              }`}
+            >
+              {f === 'all' ? 'All' : f === 'fixed_amount' ? 'Fixed' : f.charAt(0).toUpperCase() + f.slice(1)}
+            </button>
+          ))}
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="text-left text-xs font-medium text-goose-text-light uppercase tracking-wider">
+                <th className="px-6 py-3">Code</th>
+                <th className="px-6 py-3">Type</th>
+                <th className="px-6 py-3">Value</th>
+                <th className="px-6 py-3">Usage</th>
+                <th className="px-6 py-3">Valid</th>
+                <th className="px-6 py-3">Status</th>
+                <th className="px-6 py-3 w-10"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-goose-border">
+              {loading ? (
+                <tr><td colSpan={7} className="px-6 py-12 text-center"><LoadingSpinner /></td></tr>
+              ) : discounts.length === 0 ? (
+                <tr><td colSpan={7} className="px-6 py-12 text-center text-goose-text-light text-sm">No discounts found.</td></tr>
+              ) : (
+                discounts
+                  .filter(d => filter === 'all' || d.discount_type === filter)
+                  .map(d => (
+                    <tr key={d.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => openEdit(d)}>
+                      <td className="px-6 py-3 text-sm font-medium text-goose-text font-mono">{d.code}</td>
+                      <td className="px-6 py-3 text-sm text-goose-text-light capitalize">
+                        {d.discount_type === 'fixed_amount' ? 'fixed' : d.discount_type}
+                      </td>
+                      <td className="px-6 py-3 text-sm text-goose-text">
+                        {d.discount_type === 'percentage' ? `${d.amount}%` : `$${Number(d.amount).toFixed(2)}`}
+                      </td>
+                      <td className="px-6 py-3 text-sm text-goose-text-light">
+                        {d.usage_count ?? 0}{d.usage_limit ? ` / ${d.usage_limit}` : ''}
+                      </td>
+                      <td className="px-6 py-3 text-xs text-goose-text-light">
+                        {d.valid_to ? `Until ${new Date(d.valid_to).toLocaleDateString()}` : 'No expiry'}
+                      </td>
+                      <td className="px-6 py-3">
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
+                          d.status === 'active' ? 'bg-primary-50 text-primary-700' : 'bg-gray-100 text-goose-text-light'
+                        }`}>
+                          {d.status ?? 'active'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-3">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setDeleteTarget(d); }}
+                          className="p-1 text-goose-text-light hover:text-red-600 rounded transition-colors"
+                          title="Delete"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Create / edit discount slide-over */}
       <SlideOver
         open={slideOpen}
         onClose={() => setSlideOpen(false)}
-        title="Create Discount"
+        title={selectedDiscount ? `Edit Discount: ${selectedDiscount.code}` : 'Create Discount'}
       >
         <DiscountForm
+          key={selectedDiscount?.id ?? 'new'}
+          discount={selectedDiscount}
           onClose={() => setSlideOpen(false)}
           onSaved={syncDiscounts}
         />
@@ -317,51 +418,92 @@ function VoucherBalanceCheck() {
   );
 }
 
-function DiscountForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+function DiscountForm({
+  discount,
+  onClose,
+  onSaved,
+}: {
+  discount: Discount | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const { callTool } = useMcp();
+  const isEdit = !!discount;
 
-  const [code, setCode] = useState('');
-  const [type, setType] = useState<'percentage' | 'fixed' | 'voucher'>('percentage');
-  const [value, setValue] = useState('');
-  const [usageLimit, setUsageLimit] = useState('');
-  const [usageLimitPerUser, setUsageLimitPerUser] = useState('');
-  const [minimumAmount, setMinimumAmount] = useState('');
-  const [maximumDiscount, setMaximumDiscount] = useState('');
-  const [freeShipping, setFreeShipping] = useState(false);
-  const [singleUse, setSingleUse] = useState(false);
-  const [validFrom, setValidFrom] = useState('');
-  const [validUntil, setValidUntil] = useState('');
+  const toDateInput = (val: string | null | undefined): string => {
+    if (!val) return '';
+    return val.split(' ')[0]?.split('T')[0] ?? '';
+  };
+
+  const [code, setCode] = useState(discount?.code ?? '');
+  const [name, setName] = useState(discount?.name ?? '');
+  const [description, setDescription] = useState(discount?.description ?? '');
+  const [discountType, setDiscountType] = useState<DiscountType>(discount?.discount_type ?? 'percentage');
+  const [amount, setAmount] = useState(discount?.amount != null ? String(discount.amount) : '');
+  const [usageLimit, setUsageLimit] = useState(discount?.usage_limit != null ? String(discount.usage_limit) : '');
+  const [usageLimitPerUser, setUsageLimitPerUser] = useState(discount?.usage_limit_per_user != null ? String(discount.usage_limit_per_user) : '');
+  const [minimumOrderAmount, setMinimumOrderAmount] = useState(discount?.minimum_order_amount != null ? String(discount.minimum_order_amount) : '');
+  const [maximumDiscountAmount, setMaximumDiscountAmount] = useState(discount?.maximum_discount_amount != null ? String(discount.maximum_discount_amount) : '');
+  const [freeShipping, setFreeShipping] = useState(discount?.free_shipping ?? false);
+  const [singleUseVoucher, setSingleUseVoucher] = useState(discount?.single_use_voucher ?? false);
+  const [validFrom, setValidFrom] = useState(toDateInput(discount?.valid_from));
+  const [validTo, setValidTo] = useState(toDateInput(discount?.valid_to));
+  const [status, setStatus] = useState<'active' | 'inactive'>((discount?.status as 'active' | 'inactive') ?? 'active');
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!code.trim() || !value) return;
+    if (!code.trim() || !name.trim() || !amount) return;
 
     setSaving(true);
     setError(null);
 
     try {
-      const args: Record<string, unknown> = {
-        code: code.trim().toUpperCase(),
-        type,
-        value: parseFloat(value),
-      };
-      if (usageLimit) args.usage_limit = parseInt(usageLimit, 10);
-      if (usageLimitPerUser) args.usage_limit_per_user = parseInt(usageLimitPerUser, 10);
-      if (minimumAmount) args.minimum_amount = parseFloat(minimumAmount);
-      if (maximumDiscount) args.maximum_discount = parseFloat(maximumDiscount);
-      if (freeShipping) args.free_shipping = true;
-      if (singleUse) args.single_use = true;
-      if (validFrom) args.valid_from = validFrom;
-      if (validUntil) args.valid_until = validUntil;
+      if (isEdit && discount) {
+        // update_discount: id is required, code is NOT updatable
+        const args: Record<string, unknown> = {
+          id: discount.id,
+          name: name.trim(),
+          amount: parseFloat(amount),
+          status,
+        };
+        if (description.trim()) args.description = description.trim();
+        if (usageLimit) args.usage_limit = parseInt(usageLimit, 10);
+        if (usageLimitPerUser) args.usage_limit_per_user = parseInt(usageLimitPerUser, 10);
+        if (minimumOrderAmount) args.minimum_order_amount = parseFloat(minimumOrderAmount);
+        if (maximumDiscountAmount) args.maximum_discount_amount = parseFloat(maximumDiscountAmount);
+        args.free_shipping = freeShipping;
+        if (validFrom) args.valid_from = validFrom;
+        if (validTo) args.valid_to = validTo;
 
-      await callTool(MCP_TOOLS.CREATE_DISCOUNT, args);
+        await callTool(MCP_TOOLS.UPDATE_DISCOUNT, args);
+      } else {
+        // create_discount
+        const args: Record<string, unknown> = {
+          code: code.trim().toUpperCase(),
+          name: name.trim(),
+          discount_type: discountType,
+          amount: parseFloat(amount),
+          status,
+        };
+        if (description.trim()) args.description = description.trim();
+        if (usageLimit) args.usage_limit = parseInt(usageLimit, 10);
+        if (usageLimitPerUser) args.usage_limit_per_user = parseInt(usageLimitPerUser, 10);
+        if (minimumOrderAmount) args.minimum_order_amount = parseFloat(minimumOrderAmount);
+        if (maximumDiscountAmount) args.maximum_discount_amount = parseFloat(maximumDiscountAmount);
+        if (freeShipping) args.free_shipping = true;
+        if (singleUseVoucher && discountType === 'voucher') args.single_use_voucher = true;
+        if (validFrom) args.valid_from = validFrom;
+        if (validTo) args.valid_to = validTo;
+
+        await callTool(MCP_TOOLS.CREATE_DISCOUNT, args);
+      }
       onSaved();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create discount');
+      setError(err instanceof Error ? err.message : `Failed to ${isEdit ? 'update' : 'create'} discount`);
     } finally {
       setSaving(false);
     }
@@ -380,32 +522,67 @@ function DiscountForm({ onClose, onSaved }: { onClose: () => void; onSaved: () =
             value={code}
             onChange={(e) => setCode(e.target.value)}
             required
-            className="input uppercase"
+            disabled={isEdit}
+            className="input uppercase disabled:bg-gray-100 disabled:text-goose-text-light"
             placeholder="SUMMER20"
           />
         </Field>
         <Field label="Type">
-          <select value={type} onChange={(e) => setType(e.target.value as any)} className="input">
+          <select
+            value={discountType}
+            onChange={(e) => setDiscountType(e.target.value as DiscountType)}
+            disabled={isEdit}
+            className="input disabled:bg-gray-100 disabled:text-goose-text-light"
+          >
             <option value="percentage">Percentage (%)</option>
-            <option value="fixed">Fixed Amount ($)</option>
+            <option value="fixed_amount">Fixed Amount ($)</option>
             <option value="voucher">Voucher ($)</option>
           </select>
         </Field>
       </div>
 
-      <Field label={type === 'percentage' ? 'Discount (%)' : 'Value ($)'}>
+      <Field label="Name *">
         <input
-          type="number"
-          step="0.01"
-          min="0"
-          max={type === 'percentage' ? '100' : undefined}
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
           required
           className="input"
-          placeholder={type === 'percentage' ? '20' : '10.00'}
+          placeholder="e.g. Summer 2026 Sale"
         />
       </Field>
+
+      <Field label="Description">
+        <textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          className="input"
+          rows={2}
+          placeholder="Optional internal description..."
+        />
+      </Field>
+
+      <div className="grid grid-cols-2 gap-4">
+        <Field label={discountType === 'percentage' ? 'Discount (%)' : 'Value ($)'}>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            max={discountType === 'percentage' ? '100' : undefined}
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            required
+            className="input"
+            placeholder={discountType === 'percentage' ? '20' : '10.00'}
+          />
+        </Field>
+        <Field label="Status">
+          <select value={status} onChange={(e) => setStatus(e.target.value as 'active' | 'inactive')} className="input">
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </Field>
+      </div>
 
       <div className="grid grid-cols-2 gap-4">
         <Field label="Usage limit (total)">
@@ -418,11 +595,11 @@ function DiscountForm({ onClose, onSaved }: { onClose: () => void; onSaved: () =
 
       <div className="grid grid-cols-2 gap-4">
         <Field label="Min. order amount ($)">
-          <input type="number" step="0.01" min="0" value={minimumAmount} onChange={(e) => setMinimumAmount(e.target.value)} className="input" placeholder="No minimum" />
+          <input type="number" step="0.01" min="0" value={minimumOrderAmount} onChange={(e) => setMinimumOrderAmount(e.target.value)} className="input" placeholder="No minimum" />
         </Field>
-        {type === 'percentage' && (
+        {discountType === 'percentage' && (
           <Field label="Max. discount cap ($)">
-            <input type="number" step="0.01" min="0" value={maximumDiscount} onChange={(e) => setMaximumDiscount(e.target.value)} className="input" placeholder="No cap" />
+            <input type="number" step="0.01" min="0" value={maximumDiscountAmount} onChange={(e) => setMaximumDiscountAmount(e.target.value)} className="input" placeholder="No cap" />
           </Field>
         )}
       </div>
@@ -432,7 +609,7 @@ function DiscountForm({ onClose, onSaved }: { onClose: () => void; onSaved: () =
           <input type="date" value={validFrom} onChange={(e) => setValidFrom(e.target.value)} className="input" />
         </Field>
         <Field label="Valid until">
-          <input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} className="input" />
+          <input type="date" value={validTo} onChange={(e) => setValidTo(e.target.value)} className="input" />
         </Field>
       </div>
 
@@ -441,10 +618,10 @@ function DiscountForm({ onClose, onSaved }: { onClose: () => void; onSaved: () =
           <input type="checkbox" checked={freeShipping} onChange={(e) => setFreeShipping(e.target.checked)} className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
           <span className="text-sm text-goose-text">Free shipping</span>
         </label>
-        {type === 'voucher' && (
+        {discountType === 'voucher' && !isEdit && (
           <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={singleUse} onChange={(e) => setSingleUse(e.target.checked)} className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
-            <span className="text-sm text-goose-text">Single use</span>
+            <input type="checkbox" checked={singleUseVoucher} onChange={(e) => setSingleUseVoucher(e.target.checked)} className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
+            <span className="text-sm text-goose-text">Single use (full balance per redemption)</span>
           </label>
         )}
       </div>
@@ -452,11 +629,11 @@ function DiscountForm({ onClose, onSaved }: { onClose: () => void; onSaved: () =
       <div className="flex gap-3 pt-4 border-t border-goose-border">
         <button
           type="submit"
-          disabled={saving || !code.trim() || !value}
+          disabled={saving || !code.trim() || !name.trim() || !amount}
           className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
         >
           {saving && <LoadingSpinner size="sm" />}
-          Create Discount
+          {isEdit ? 'Update Discount' : 'Create Discount'}
         </button>
         <button
           type="button"

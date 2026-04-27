@@ -30,6 +30,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('dialog:save-file', filename, base64Content),
     pickImage: () =>
       ipcRenderer.invoke('dialog:pick-image') as Promise<{ filePath: string; base64: string; filename: string; mime: string } | null>,
+    pickFile: () =>
+      ipcRenderer.invoke('dialog:pick-file') as Promise<{ filePath: string; base64: string; filename: string; mime: string; size: number } | null>,
   },
   media: {
     uploadLocal: (payload: { siteUrl: string; apiKey: string; base64: string; filename: string; mime: string }) =>

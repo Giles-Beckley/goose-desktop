@@ -112,6 +112,7 @@ export const MCP_TOOLS = {
   ADD_PRODUCT_GALLERY_IMAGE: 'add_product_gallery_image',
   LIST_MEDIA_IMAGES: 'list_media_images',
   UPLOAD_IMAGE_BASE64: 'upload_image_base64',
+  UPLOAD_FILE_BASE64: 'upload_file_base64',
 
   // Shipments
   LIST_CARRIERS: 'list_carriers',
@@ -132,6 +133,11 @@ export const MCP_TOOLS = {
   DOWNLOAD_EXPORT: 'download_export',
   MARK_ORDERS_UNEXPORTED: 'mark_orders_unexported',
   GET_UNEXPORTED_ORDERS_PREVIEW: 'get_unexported_orders_preview',
+
+  // Documents
+  GET_PRODUCT_DOCUMENTS: 'get_product_documents',
+  ADD_PRODUCT_DOCUMENT: 'add_product_document',
+  DELETE_PRODUCT_DOCUMENT: 'delete_product_document',
 } as const;
 
 // ── Resources (read-only data) ──────────────────────────────────────────
@@ -163,6 +169,17 @@ export const MCP_RESOURCES = {
 
   // Exports
   EXPORT_BATCHES: 'export_batches',
+  EXPORT_BATCH_BY_ID: 'export_batch://{id}',
   EXPORT_STATISTICS: 'export_statistics',
   UNEXPORTED_ORDERS: 'unexported_orders',
+
+  // Discounts & Vouchers
+  DISCOUNTS: 'discounts',
+  DISCOUNT_BY_ID: 'discount://{id}',
+  DISCOUNT_BY_CODE: 'discount_code://{code}',
+  DISCOUNT_USAGE: 'discount_usage://{id}',
+  VOUCHER_BALANCE: 'voucher_balance://{code}',
+  ACTIVE_DISCOUNTS: 'active_discounts',
+  DISCOUNT_STATISTICS: 'discount_statistics',
+  GIFT_CARD_PRODUCTS: 'gift_card_products',
 } as const;
