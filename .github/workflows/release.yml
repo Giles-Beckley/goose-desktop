@@ -1,0 +1,33 @@
+name: Release
+
+# Triggered when you push a tag like v1.2.3
+# - Builds the Windows installer on a Windows runner
+# - Publishes a draft GitHub Release with the .exe and latest.yml
+# - Once you publish the draft on GitHub, existing installs auto-detect the update
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    permissions:
+      contents: write  # required to create the release
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build & publish (Windows)
+        run: npm run release:win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
