@@ -64,7 +64,7 @@ export function Sidebar() {
       </nav>
 
       <div className="px-5 py-4 border-t border-white/10">
-        <p className="text-xs text-white/30">v1.1.4</p>
+        <p className="text-xs text-white/30">v1.1.5</p>
       </div>
     </aside>
   );
