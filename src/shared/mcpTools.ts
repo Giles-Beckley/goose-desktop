@@ -12,6 +12,7 @@ export const MCP_TOOLS = {
   FIND_PRODUCT_BY_SKU: 'find_product_by_sku',
   CHECK_PRODUCT_AVAILABILITY: 'check_product_availability',
   GET_PRODUCT_RECOMMENDATIONS: 'get_product_recommendations',
+  LIST_PRODUCT_TYPES: 'list_product_types',
 
   // Product management (CRUD)
   CREATE_PRODUCT: 'create_product',
@@ -110,6 +111,7 @@ export const MCP_TOOLS = {
   SET_PRODUCT_IMAGE: 'set_product_image',
   ADD_PRODUCT_GALLERY_IMAGE: 'add_product_gallery_image',
   LIST_MEDIA_IMAGES: 'list_media_images',
+  UPLOAD_IMAGE_BASE64: 'upload_image_base64',
 
   // Shipments
   LIST_CARRIERS: 'list_carriers',
@@ -127,6 +129,7 @@ export const MCP_TOOLS = {
   // Export
   EXPORT_TRANSACTIONS: 'export_transactions',
   REGENERATE_EXPORT: 'regenerate_export',
+  DOWNLOAD_EXPORT: 'download_export',
   MARK_ORDERS_UNEXPORTED: 'mark_orders_unexported',
   GET_UNEXPORTED_ORDERS_PREVIEW: 'get_unexported_orders_preview',
 } as const;
@@ -157,4 +160,9 @@ export const MCP_RESOURCES = {
   CUSTOMER_BY_EMAIL: 'customer://{email}',
   CUSTOMER_ADDRESSES: 'customer://{email}/addresses',
   CUSTOMER_STATISTICS: 'customer://statistics',
+
+  // Exports
+  EXPORT_BATCHES: 'export_batches',
+  EXPORT_STATISTICS: 'export_statistics',
+  UNEXPORTED_ORDERS: 'unexported_orders',
 } as const;
