@@ -23,6 +23,7 @@ nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
   include: resources/installer.nsh
+  artifactName: Goose-Commerce-Setup.${ext}
 publish:
   provider: github
   owner: Giles-Beckley
