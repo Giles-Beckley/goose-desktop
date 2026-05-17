@@ -228,6 +228,50 @@ export interface Product {
   categories?: Array<{ id: number; name: string; slug: string }>;
   tags?: Array<{ id: number; name: string; slug: string }>;
   created_at?: string;
+
+  // Listing address (Locations premium component — single-location use case)
+  listing_address_1?: string;
+  listing_address_2?: string;
+  listing_city?: string;
+  listing_state?: string;
+  listing_postcode?: string;
+  listing_country?: string;
+  listing_lat?: number | null;
+  listing_lng?: number | null;
+  listing_display?: 'exact' | 'approximate' | 'hidden';
+
+  // Restock date (YYYY-MM-DD) — shown to customers when out of stock
+  restock_date?: string;
+}
+
+// Locations / Outlets
+export interface Outlet {
+  id: number;
+  name: string;
+  slug: string;
+  address_1?: string;
+  address_2?: string;
+  city?: string;
+  state?: string;
+  postcode?: string;
+  country?: string;
+  lat?: number | null;
+  lng?: number | null;
+  phone?: string;
+  email?: string;
+  url?: string;
+  opening_hours?: string;
+  status: 'active' | 'inactive';
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ProductOutletLink {
+  outlet_id: number;
+  outlet_name?: string;
+  stock: number | null;
+  stock_status: 'instock' | 'outofstock' | 'onbackorder';
+  price_override?: number | null;
 }
 
 // Category/Tag types

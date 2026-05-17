@@ -25,6 +25,10 @@ interface ConnectionState {
   licenseExpiresAt: string | null;
   licenseEmail: string;
 
+  // Premium component gates (null = not yet probed)
+  locationsEnabled: boolean | null;
+  setLocationsEnabled: (enabled: boolean | null) => void;
+
   setSiteUrl: (url: string) => void;
   setApiKey: (key: string) => void;
   setStatus: (status: ConnectionStatus) => void;
@@ -64,6 +68,9 @@ export const useConnectionStore = create<ConnectionState>((set) => ({
   licenseStatus: '',
   licenseExpiresAt: null,
   licenseEmail: '',
+
+  locationsEnabled: null,
+  setLocationsEnabled: (enabled) => set({ locationsEnabled: enabled }),
 
   setSiteUrl: (url) => set({ siteUrl: url }),
   setApiKey: (key) => set({ apiKey: key }),

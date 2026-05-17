@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useMcp } from '../hooks/useMcp';
+import { useConnectionStore } from '../stores/connectionStore';
 import { MCP_TOOLS } from '../../shared/mcpTools';
 import { LoadingSpinner } from './LoadingSpinner';
-import type { Product, Category, Tag, AttributeGroup, ProductAttribute, VariationType, ProductVariation } from '../../shared/types';
+import type { Product, Category, Tag, AttributeGroup, ProductAttribute, VariationType, ProductVariation, Outlet, ProductOutletLink } from '../../shared/types';
 
 interface ProductFormProps {
   product?: Product | null;
@@ -12,7 +13,10 @@ interface ProductFormProps {
 
 export function ProductForm({ product, onClose, onSaved }: ProductFormProps) {
   const { callTool } = useMcp();
+  const { locationsEnabled } = useConnectionStore();
   const isEdit = !!product;
+  // Treat null (still probing) as "show the tab" so we don't flash; only hide once we're sure it's off
+  const showLocations = locationsEnabled !== false;
 
   // Basic fields
   const [name, setName] = useState(product?.name ?? '');
@@ -31,6 +35,28 @@ export function ProductForm({ product, onClose, onSaved }: ProductFormProps) {
   const [shortDescription, setShortDescription] = useState(product?.short_description ?? '');
   const [weight, setWeight] = useState(product?.weight != null ? String(product.weight) : '');
   const [featured, setFeatured] = useState(product?.featured ?? false);
+  const [restockDate, setRestockDate] = useState(product?.restock_date ?? '');
+
+  // Listing address (Locations premium component, single-location use case)
+  const [listingAddress1, setListingAddress1] = useState(product?.listing_address_1 ?? '');
+  const [listingAddress2, setListingAddress2] = useState(product?.listing_address_2 ?? '');
+  const [listingCity, setListingCity] = useState(product?.listing_city ?? '');
+  const [listingState, setListingState] = useState(product?.listing_state ?? '');
+  const [listingPostcode, setListingPostcode] = useState(product?.listing_postcode ?? '');
+  const [listingCountry, setListingCountry] = useState(product?.listing_country ?? '');
+  const [listingDisplay, setListingDisplay] = useState<'exact' | 'approximate' | 'hidden'>(product?.listing_display ?? 'exact');
+  // lat/lng come from the plugin's geocoder; we render them read-only
+  const listingLat = product?.listing_lat;
+  const listingLng = product?.listing_lng;
+
+  // Outlets stocking this product (junction-table use case)
+  const [productOutlets, setProductOutlets] = useState<ProductOutletLink[]>([]);
+  const [allOutlets, setAllOutlets] = useState<Outlet[]>([]);
+  const [loadingOutlets, setLoadingOutlets] = useState(false);
+  const [attachOutletId, setAttachOutletId] = useState<string>('');
+  const [attachStock, setAttachStock] = useState<string>('');
+  const [attachStatus, setAttachStatus] = useState<'instock' | 'outofstock' | 'onbackorder'>('instock');
+  const [attaching, setAttaching] = useState(false);
 
   // Categories & Tags
   const [allCategories, setAllCategories] = useState<Category[]>([]);
@@ -76,7 +102,7 @@ export function ProductForm({ product, onClose, onSaved }: ProductFormProps) {
   const [uploading, setUploading] = useState(false);
 
   // UI state
-  const [activeTab, setActiveTab] = useState<'general' | 'categories' | 'attributes' | 'variations' | 'images' | 'documents'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'categories' | 'attributes' | 'variations' | 'images' | 'documents' | 'locations'>('general');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -86,7 +112,13 @@ export function ProductForm({ product, onClose, onSaved }: ProductFormProps) {
     loadTaxonomies();
     loadAttributes();
     loadVariations();
-    if (isEdit) loadDocuments();
+    if (isEdit) {
+      loadDocuments();
+      if (showLocations) {
+        loadOutletPool();
+        loadProductOutlets();
+      }
+    }
   }, []);
 
   const loadProductTypes = async () => {
@@ -463,6 +495,101 @@ export function ProductForm({ product, onClose, onSaved }: ProductFormProps) {
     }
   };
 
+  const loadOutletPool = async () => {
+    try {
+      const result = await callTool(MCP_TOOLS.LIST_OUTLETS, { status: 'active', limit: 500 });
+      const text = result?.content?.[0]?.text;
+      if (text) {
+        const data = JSON.parse(text);
+        if (data?.success !== false) {
+          setAllOutlets(data.outlets ?? []);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load outlet pool:', err);
+    }
+  };
+
+  const loadProductOutlets = async () => {
+    if (!product) return;
+    setLoadingOutlets(true);
+    try {
+      const result = await callTool(MCP_TOOLS.LIST_PRODUCT_OUTLETS, { product_id: product.id });
+      const text = result?.content?.[0]?.text;
+      if (text) {
+        const data = JSON.parse(text);
+        if (data?.success !== false) {
+          setProductOutlets(data.outlets ?? data.product_outlets ?? []);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load product outlets:', err);
+    } finally {
+      setLoadingOutlets(false);
+    }
+  };
+
+  const handleAttachOutlet = async () => {
+    if (!product || !attachOutletId) return;
+    setAttaching(true);
+    setError(null);
+    try {
+      const args: Record<string, unknown> = {
+        product_id: product.id,
+        outlet_id: parseInt(attachOutletId, 10),
+        stock_status: attachStatus,
+      };
+      if (attachStock.trim() !== '') args.stock = parseInt(attachStock, 10);
+
+      const res = await callTool(MCP_TOOLS.ATTACH_OUTLET_TO_PRODUCT, args);
+      const text = res?.content?.[0]?.text;
+      if (text) {
+        const data = JSON.parse(text);
+        if (data?.success === false) {
+          setError(data.message ?? data.error ?? 'Failed to attach outlet');
+          return;
+        }
+      }
+      setAttachOutletId('');
+      setAttachStock('');
+      setAttachStatus('instock');
+      loadProductOutlets();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to attach outlet');
+    } finally {
+      setAttaching(false);
+    }
+  };
+
+  const handleUpdateOutletLink = async (link: ProductOutletLink, patch: Partial<ProductOutletLink>) => {
+    if (!product) return;
+    try {
+      const merged = { ...link, ...patch };
+      const args: Record<string, unknown> = {
+        product_id: product.id,
+        outlet_id: merged.outlet_id,
+        stock_status: merged.stock_status,
+      };
+      if (merged.stock != null) args.stock = merged.stock;
+      await callTool(MCP_TOOLS.ATTACH_OUTLET_TO_PRODUCT, args);
+      // Optimistic local update
+      setProductOutlets((prev) => prev.map((l) => (l.outlet_id === link.outlet_id ? merged : l)));
+    } catch (err) {
+      console.error('Failed to update outlet link:', err);
+      loadProductOutlets(); // revert to server truth
+    }
+  };
+
+  const handleDetachOutlet = async (outletId: number) => {
+    if (!product) return;
+    try {
+      await callTool(MCP_TOOLS.DETACH_OUTLET_FROM_PRODUCT, { product_id: product.id, outlet_id: outletId });
+      loadProductOutlets();
+    } catch (err) {
+      console.error('Failed to detach outlet:', err);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
@@ -485,6 +612,18 @@ export function ProductForm({ product, onClose, onSaved }: ProductFormProps) {
       if (shortDescription.trim()) args.short_description = shortDescription.trim();
       if (weight) args.weight = parseFloat(weight);
       if (lowStockThreshold) args.low_stock_threshold = parseInt(lowStockThreshold, 10);
+      if (restockDate) args.restock_date = restockDate;
+
+      // Listing fields (Locations premium component). Only send when the feature is active.
+      if (showLocations) {
+        if (listingAddress1.trim()) args.listing_address_1 = listingAddress1.trim();
+        if (listingAddress2.trim()) args.listing_address_2 = listingAddress2.trim();
+        if (listingCity.trim()) args.listing_city = listingCity.trim();
+        if (listingState.trim()) args.listing_state = listingState.trim();
+        if (listingPostcode.trim()) args.listing_postcode = listingPostcode.trim();
+        if (listingCountry.trim()) args.listing_country = listingCountry.trim().toUpperCase().slice(0, 2);
+        args.listing_display = listingDisplay;
+      }
 
       let productId = product?.id;
 
@@ -557,6 +696,7 @@ export function ProductForm({ product, onClose, onSaved }: ProductFormProps) {
       { key: 'documents' as const, label: 'Documents' },
       { key: 'variations' as const, label: 'Variations' },
     ] : []),
+    ...(showLocations ? [{ key: 'locations' as const, label: 'Locations' }] : []),
   ];
 
   return (
@@ -646,6 +786,18 @@ export function ProductForm({ product, onClose, onSaved }: ProductFormProps) {
                 <input type="number" min="0" value={lowStockThreshold} onChange={(e) => setLowStockThreshold(e.target.value)} className="input" placeholder="e.g. 5" />
               </Field>
             </div>
+
+            {(stockStatus === 'outofstock' || stockStatus === 'onbackorder') && (
+              <Field label="Expected restock date">
+                <input
+                  type="date"
+                  value={restockDate}
+                  onChange={(e) => setRestockDate(e.target.value)}
+                  className="input"
+                />
+                <p className="text-xs text-goose-text-light mt-1">Shown to customers on the product page while it's unavailable.</p>
+              </Field>
+            )}
 
             <Field label="Weight">
               <input type="number" step="0.01" min="0" value={weight} onChange={(e) => setWeight(e.target.value)} className="input" placeholder="kg" />
@@ -986,6 +1138,170 @@ export function ProductForm({ product, onClose, onSaved }: ProductFormProps) {
                 </div>
               )}
             </div>
+          </>
+        )}
+
+        {/* ── Locations tab (Locations premium component) ── */}
+        {activeTab === 'locations' && showLocations && (
+          <>
+            {/* Listing address: single address ON the product (classified / property mode) */}
+            <div>
+              <h3 className="text-sm font-medium text-goose-text mb-1">Listing address</h3>
+              <p className="text-xs text-goose-text-light mb-3">
+                Use this when the product IS a location (e.g. property, vehicle, classified listing). Leave blank if not applicable.
+              </p>
+              <div className="space-y-3">
+                <Field label="Address line 1">
+                  <input type="text" value={listingAddress1} onChange={(e) => setListingAddress1(e.target.value)} className="input" />
+                </Field>
+                <Field label="Address line 2">
+                  <input type="text" value={listingAddress2} onChange={(e) => setListingAddress2(e.target.value)} className="input" />
+                </Field>
+                <div className="grid grid-cols-2 gap-4">
+                  <Field label="City">
+                    <input type="text" value={listingCity} onChange={(e) => setListingCity(e.target.value)} className="input" />
+                  </Field>
+                  <Field label="County / State">
+                    <input type="text" value={listingState} onChange={(e) => setListingState(e.target.value)} className="input" />
+                  </Field>
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <Field label="Postcode">
+                    <input type="text" value={listingPostcode} onChange={(e) => setListingPostcode(e.target.value)} className="input" />
+                  </Field>
+                  <Field label="Country (ISO)">
+                    <input
+                      type="text"
+                      value={listingCountry}
+                      onChange={(e) => setListingCountry(e.target.value.toUpperCase().slice(0, 2))}
+                      className="input uppercase"
+                      maxLength={2}
+                      placeholder="GB"
+                    />
+                  </Field>
+                  <Field label="Display mode">
+                    <select value={listingDisplay} onChange={(e) => setListingDisplay(e.target.value as 'exact' | 'approximate' | 'hidden')} className="input">
+                      <option value="exact">Exact pin</option>
+                      <option value="approximate">Approximate</option>
+                      <option value="hidden">Hidden</option>
+                    </select>
+                  </Field>
+                </div>
+                <p className="text-xs text-goose-text-light">
+                  Coordinates: {listingLat != null && listingLng != null
+                    ? `${Number(listingLat).toFixed(5)}, ${Number(listingLng).toFixed(5)}`
+                    : 'auto-geocoded when you save the address'}
+                </p>
+              </div>
+            </div>
+
+            {/* Outlets stocking this product (shared outlet pool) */}
+            {isEdit && (
+              <div className="pt-4 border-t border-goose-border">
+                <h3 className="text-sm font-medium text-goose-text mb-1">Outlets stocking this product</h3>
+                <p className="text-xs text-goose-text-light mb-3">
+                  Link this product to shops/outlets from the shared pool. Each outlet can hold its own stock level.
+                </p>
+
+                {loadingOutlets ? (
+                  <div className="flex justify-center py-4"><LoadingSpinner size="sm" /></div>
+                ) : productOutlets.length === 0 ? (
+                  <p className="text-sm text-goose-text-light py-2">Not stocked at any outlet yet.</p>
+                ) : (
+                  <div className="border border-goose-border rounded-lg divide-y divide-goose-border mb-3">
+                    {productOutlets.map((link) => (
+                      <div key={link.outlet_id} className="flex items-center gap-3 px-3 py-2">
+                        <span className="flex-1 text-sm text-goose-text">
+                          {link.outlet_name ?? allOutlets.find((o) => o.id === link.outlet_id)?.name ?? `Outlet #${link.outlet_id}`}
+                        </span>
+                        <input
+                          type="number"
+                          min="0"
+                          value={link.stock ?? ''}
+                          onChange={(e) => {
+                            const next = e.target.value === '' ? null : parseInt(e.target.value, 10);
+                            handleUpdateOutletLink(link, { stock: next });
+                          }}
+                          className="w-20 px-2 py-1 border border-goose-border rounded text-sm text-center"
+                          placeholder="—"
+                          title="Stock at this outlet (blank = untracked)"
+                        />
+                        <select
+                          value={link.stock_status}
+                          onChange={(e) => handleUpdateOutletLink(link, { stock_status: e.target.value as 'instock' | 'outofstock' | 'onbackorder' })}
+                          className="px-2 py-1 border border-goose-border rounded text-xs"
+                        >
+                          <option value="instock">In stock</option>
+                          <option value="outofstock">Out of stock</option>
+                          <option value="onbackorder">Backorder</option>
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => handleDetachOutlet(link.outlet_id)}
+                          className="p-1 text-goose-text-light hover:text-red-600"
+                          title="Remove"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Attach a new outlet */}
+                {allOutlets.length === 0 ? (
+                  <p className="text-xs text-goose-text-light">No outlets defined yet. Create some on the Locations page first.</p>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={attachOutletId}
+                      onChange={(e) => setAttachOutletId(e.target.value)}
+                      className="flex-1 px-2 py-1.5 border border-goose-border rounded text-sm"
+                    >
+                      <option value="">Pick an outlet to add...</option>
+                      {allOutlets
+                        .filter((o) => !productOutlets.some((link) => link.outlet_id === o.id))
+                        .map((o) => (
+                          <option key={o.id} value={o.id}>{o.name}{o.city ? ` — ${o.city}` : ''}</option>
+                        ))}
+                    </select>
+                    <input
+                      type="number"
+                      min="0"
+                      value={attachStock}
+                      onChange={(e) => setAttachStock(e.target.value)}
+                      className="w-20 px-2 py-1.5 border border-goose-border rounded text-sm text-center"
+                      placeholder="Stock"
+                    />
+                    <select
+                      value={attachStatus}
+                      onChange={(e) => setAttachStatus(e.target.value as 'instock' | 'outofstock' | 'onbackorder')}
+                      className="px-2 py-1.5 border border-goose-border rounded text-xs"
+                    >
+                      <option value="instock">In stock</option>
+                      <option value="outofstock">Out of stock</option>
+                      <option value="onbackorder">Backorder</option>
+                    </select>
+                    <button
+                      type="button"
+                      onClick={handleAttachOutlet}
+                      disabled={attaching || !attachOutletId}
+                      className="px-3 py-1.5 text-xs font-medium text-white bg-primary-600 rounded hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center gap-1"
+                    >
+                      {attaching ? <LoadingSpinner size="sm" /> : 'Attach'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!isEdit && (
+              <p className="text-sm text-goose-text-light pt-4 border-t border-goose-border">
+                Save the product first, then you can attach outlets to it.
+              </p>
+            )}
           </>
         )}
 

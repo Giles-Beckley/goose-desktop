@@ -8,12 +8,46 @@ import { Orders } from './pages/Orders';
 import { Customers } from './pages/Customers';
 import { Exports } from './pages/Exports';
 import { Discounts } from './pages/Discounts';
+import { Locations } from './pages/Locations';
 import { Settings } from './pages/Settings';
 import { Assistant } from './pages/Assistant';
 import { Register } from './pages/Register';
 import { FloatingChatButton } from './components/FloatingChatButton';
 import { LoadingSpinner } from './components/LoadingSpinner';
 import { useConnectionStore } from './stores/connectionStore';
+import { McpClient } from './services/mcpClient';
+import { MCP_TOOLS } from '../shared/mcpTools';
+
+/**
+ * Probe the 'locations' premium component once per session.
+ * Calls list_outlets — if the plugin returns license_inactive, the feature is gated.
+ * Anything else (success or any other error) is treated as enabled to avoid false negatives.
+ */
+async function probeLocationsLicense(
+  siteUrl: string,
+  apiKey: string,
+  setEnabled: (v: boolean | null) => void,
+): Promise<void> {
+  try {
+    const client = new McpClient(siteUrl, apiKey);
+    await client.initialize();
+    const result = await client.callTool(MCP_TOOLS.LIST_OUTLETS, { limit: 1 });
+    const text = result?.content?.[0]?.text;
+    if (text) {
+      try {
+        const data = JSON.parse(text);
+        if (data?.error === 'license_inactive') {
+          setEnabled(false);
+          return;
+        }
+      } catch { /* fall through to enabled */ }
+    }
+    setEnabled(true);
+  } catch {
+    // Network/connection issue — treat as enabled so the UI doesn't disappear unexpectedly
+    setEnabled(true);
+  }
+}
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null as Error | null };
@@ -36,7 +70,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
 }
 
 export function App() {
-  const { isOnboarded, licenseValid, setCredentials, setOnboarded, setStatus, setAiStatus, setLicense } = useConnectionStore();
+  const { isOnboarded, licenseValid, setCredentials, setOnboarded, setStatus, setAiStatus, setLicense, setLocationsEnabled } = useConnectionStore();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -48,6 +82,12 @@ export function App() {
           setCredentials(credentials.siteUrl, credentials.apiKey);
           setStatus('connected');
           setOnboarded(true);
+
+          // Probe the 'locations' premium component once per session.
+          // We call list_outlets via the MCP proxy directly so the result tells
+          // us whether the feature is licensed without surfacing an error to
+          // the user. license_inactive => disabled; anything else => enabled.
+          probeLocationsLicense(credentials.siteUrl, credentials.apiKey, setLocationsEnabled);
         }
 
         // Load and validate license key (for AI features — non-blocking)
@@ -111,7 +151,7 @@ export function App() {
       }
     }
     loadCredentials();
-  }, [setCredentials, setOnboarded, setStatus, setAiStatus, setLicense]);
+  }, [setCredentials, setOnboarded, setStatus, setAiStatus, setLicense, setLocationsEnabled]);
 
   if (loading) {
     return (
@@ -137,6 +177,7 @@ export function App() {
             <Route path="/customers" element={<Customers />} />
             <Route path="/exports" element={<Exports />} />
             <Route path="/discounts" element={<Discounts />} />
+            <Route path="/locations" element={<Locations />} />
             <Route path="/settings" element={<Settings />} />
           </Route>
         </Routes>

@@ -138,6 +138,18 @@ export const MCP_TOOLS = {
   GET_PRODUCT_DOCUMENTS: 'get_product_documents',
   ADD_PRODUCT_DOCUMENT: 'add_product_document',
   DELETE_PRODUCT_DOCUMENT: 'delete_product_document',
+
+  // Locations / Outlets (premium component: 'locations')
+  CREATE_OUTLET: 'create_outlet',
+  UPDATE_OUTLET: 'update_outlet',
+  DELETE_OUTLET: 'delete_outlet',
+  LIST_OUTLETS: 'list_outlets',
+  GET_OUTLET: 'get_outlet',
+  ATTACH_OUTLET_TO_PRODUCT: 'attach_outlet_to_product',
+  DETACH_OUTLET_FROM_PRODUCT: 'detach_outlet_from_product',
+  LIST_PRODUCT_OUTLETS: 'list_product_outlets',
+  SEARCH_OUTLETS_NEAR: 'search_outlets_near',
+  SEARCH_LISTINGS_NEAR: 'search_listings_near',
 } as const;
 
 // ── Resources (read-only data) ──────────────────────────────────────────

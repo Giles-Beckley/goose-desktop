@@ -1,19 +1,32 @@
 import { NavLink } from 'react-router-dom';
 import { useConnectionStore } from '../stores/connectionStore';
 
-const navItems = [
-  { to: '/', label: 'Dashboard', icon: DashboardIcon, requiresLicense: false },
+interface NavItem {
+  to: string;
+  label: string;
+  icon: () => JSX.Element;
+  requiresLicense?: boolean;
+  requiresLocations?: boolean;
+}
+
+const navItems: NavItem[] = [
+  { to: '/', label: 'Dashboard', icon: DashboardIcon },
   { to: '/assistant', label: 'Assistant', icon: AssistantIcon, requiresLicense: true },
-  { to: '/products', label: 'Products', icon: ProductsIcon, requiresLicense: false },
-  { to: '/orders', label: 'Orders', icon: OrdersIcon, requiresLicense: false },
-  { to: '/customers', label: 'Customers', icon: CustomersIcon, requiresLicense: false },
-  { to: '/exports', label: 'Exports', icon: ExportsIcon, requiresLicense: false },
-  { to: '/discounts', label: 'Discounts', icon: DiscountsIcon, requiresLicense: false },
-  { to: '/settings', label: 'Settings', icon: SettingsIcon, requiresLicense: false },
+  { to: '/products', label: 'Products', icon: ProductsIcon },
+  { to: '/orders', label: 'Orders', icon: OrdersIcon },
+  { to: '/customers', label: 'Customers', icon: CustomersIcon },
+  { to: '/locations', label: 'Locations', icon: LocationsIcon, requiresLocations: true },
+  { to: '/exports', label: 'Exports', icon: ExportsIcon },
+  { to: '/discounts', label: 'Discounts', icon: DiscountsIcon },
+  { to: '/settings', label: 'Settings', icon: SettingsIcon },
 ];
 
 export function Sidebar() {
-  const { licenseValid } = useConnectionStore();
+  const { licenseValid, locationsEnabled } = useConnectionStore();
+  // Hide items behind a feature gate only once we've definitively detected it's off
+  const visibleItems = navItems.filter(
+    (item) => !(item.requiresLocations && locationsEnabled === false),
+  );
 
   return (
     <aside className="w-60 flex flex-col h-full" style={{ backgroundColor: '#1E293B' }}>
@@ -24,7 +37,7 @@ export function Sidebar() {
 
       <nav className="flex-1 py-4">
         <ul className="space-y-0.5 px-3">
-          {navItems.map((item) => {
+          {visibleItems.map((item) => {
             const disabled = item.requiresLicense && !licenseValid;
 
             if (disabled) {
@@ -64,7 +77,7 @@ export function Sidebar() {
       </nav>
 
       <div className="px-5 py-4 border-t border-white/10">
-        <p className="text-xs text-white/30">v1.1.6</p>
+        <p className="text-xs text-white/30">v1.1.7</p>
       </div>
     </aside>
   );
@@ -122,6 +135,15 @@ function DiscountsIcon() {
   return (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+    </svg>
+  );
+}
+
+function LocationsIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
     </svg>
   );
 }
