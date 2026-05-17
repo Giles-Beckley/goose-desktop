@@ -31,7 +31,7 @@ export function SlideOver({ open, onClose, title, children, wide }: SlideOverPro
       {/* Panel */}
       <div
         ref={panelRef}
-        className={`relative bg-white shadow-xl flex flex-col ${wide ? 'w-[600px]' : 'w-[440px]'} max-w-full animate-slide-in`}
+        className={`relative bg-white shadow-xl flex flex-col ${wide ? 'w-[800px]' : 'w-[440px]'} max-w-full animate-slide-in`}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-goose-border">

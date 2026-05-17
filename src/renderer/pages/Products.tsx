@@ -184,6 +184,7 @@ export function Products() {
         open={slideOpen}
         onClose={() => setSlideOpen(false)}
         title={selectedProduct ? 'Edit Product' : 'Add Product'}
+        wide
       >
         <ProductForm
           product={selectedProduct}
