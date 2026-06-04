@@ -28,6 +28,7 @@ export function Settings() {
   const [newLicenseKey, setNewLicenseKey] = useState('');
   const [activatingLicense, setActivatingLicense] = useState(false);
   const [licenseMessage, setLicenseMessage] = useState('');
+  const [changingLicense, setChangingLicense] = useState(false);
 
   // Fetch AI status on mount if we have a valid license
   useEffect(() => {
@@ -144,6 +145,7 @@ export function Settings() {
         }
 
         setNewLicenseKey('');
+        setChangingLicense(false);
         setLicenseMessage('License activated successfully!');
       } else {
         const errorMessages: Record<string, string> = {
@@ -216,9 +218,9 @@ export function Settings() {
           </div>
         </div>
 
-        {/* License */}
+        {/* AI License */}
         <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">License</h2>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">AI License</h2>
           <div className="space-y-3">
             {licenseValid ? (
               <>
@@ -302,8 +304,62 @@ export function Settings() {
                       {testingAi && <LoadingSpinner size="sm" />}
                       Test AI Connection
                     </button>
+                    {!changingLicense && (
+                      <button
+                        onClick={() => {
+                          setChangingLicense(true);
+                          setNewLicenseKey('');
+                          setLicenseMessage('');
+                        }}
+                        className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors"
+                      >
+                        Change License
+                      </button>
+                    )}
                   </div>
                 </div>
+
+                {/* Change license form */}
+                {changingLicense && (
+                  <div className="border-t border-gray-100 pt-3 mt-3 space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">New License Key</label>
+                      <input
+                        type="text"
+                        value={newLicenseKey}
+                        onChange={(e) => setNewLicenseKey(e.target.value.toUpperCase())}
+                        placeholder="GGMC-XXXX-XXXX-XXXX-XXXX"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                      />
+                    </div>
+                    {licenseMessage && (
+                      <p className={`text-sm ${licenseMessage.includes('successfully') ? 'text-green-600' : 'text-red-600'}`}>
+                        {licenseMessage}
+                      </p>
+                    )}
+                    <div className="flex gap-3">
+                      <button
+                        onClick={handleActivateLicense}
+                        disabled={activatingLicense || !newLicenseKey}
+                        className="px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                      >
+                        {activatingLicense && <LoadingSpinner size="sm" />}
+                        {activatingLicense ? 'Activating...' : 'Update License'}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setChangingLicense(false);
+                          setNewLicenseKey('');
+                          setLicenseMessage('');
+                        }}
+                        disabled={activatingLicense}
+                        className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
               </>
             ) : (
               <>
