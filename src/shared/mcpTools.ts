@@ -2,6 +2,13 @@
  * Hardcoded MCP tool and resource names from the GGM Commerce plugin.
  * Since we control both the plugin and the desktop app, we can reference
  * these directly instead of discovering them at runtime.
+ *
+ * These names are for the desktop app's OWN direct `tools/call` usage
+ * (see mcpClient.ts). They remain individually callable by name on the
+ * plugin regardless of the AI/dispatcher surface. The AI assistant does
+ * NOT use these constants — it reaches the same operations through the
+ * dispatcher tools (store_query / store_action) via discovery; see
+ * systemPrompt.ts. Verified in sync with the live plugin: 110 tools.
  */
 
 // ── Tools (executable actions) ──────────────────────────────────────────
