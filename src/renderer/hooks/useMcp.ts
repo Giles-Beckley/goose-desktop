@@ -1,13 +1,14 @@
 import { useCallback, useRef } from 'react';
 import { McpClient } from '../services/mcpClient';
 import { useConnectionStore } from '../stores/connectionStore';
+import { isAccessDenied } from '../../shared/access';
 import type { McpToolResult } from '../../shared/types';
 
 let initialized = false;
 let initPromise: Promise<void> | null = null;
 
 export function useMcp() {
-  const { siteUrl, apiKey, setStatus } = useConnectionStore();
+  const { siteUrl, apiKey, setStatus, setAccess } = useConnectionStore();
   const clientRef = useRef<McpClient | null>(null);
 
   const getClient = useCallback((): McpClient | null => {
@@ -64,10 +65,16 @@ export function useMcp() {
       return await client.callTool(toolName, args);
     } catch (error) {
       console.error(`Failed to call tool ${toolName}:`, error);
-      setStatus('error');
+      // The store is the final authority on access. If it rejected this call
+      // because the key's group changed, refresh ggmcAccess so the UI re-gates.
+      if (isAccessDenied(error)) {
+        client.whoami().then((a) => { if (a) setAccess(a); }).catch(() => {});
+      } else {
+        setStatus('error');
+      }
       return null;
     }
-  }, [getClient, setStatus, ensureInitialized]);
+  }, [getClient, setStatus, setAccess, ensureInitialized]);
 
   const readResource = useCallback(async (
     uri: string

@@ -8,9 +8,11 @@ interface CustomerFormProps {
   customer?: Customer | null;
   onClose: () => void;
   onSaved: () => void;
+  /** View-only mode for read-access keys: disables inputs, hides save. */
+  readOnly?: boolean;
 }
 
-export function CustomerForm({ customer, onClose, onSaved }: CustomerFormProps) {
+export function CustomerForm({ customer, onClose, onSaved, readOnly = false }: CustomerFormProps) {
   const { callTool } = useMcp();
   const isEdit = !!customer;
 
@@ -66,7 +68,13 @@ export function CustomerForm({ customer, onClose, onSaved }: CustomerFormProps) 
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-600">{error}</div>
       )}
+      {readOnly && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-700">
+          Your API key has read-only access to customers. Editing is disabled.
+        </div>
+      )}
 
+      <fieldset disabled={readOnly} className="contents">
       <Field label="Email *">
         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="input" placeholder="customer@example.com" />
       </Field>
@@ -106,24 +114,27 @@ export function CustomerForm({ customer, onClose, onSaved }: CustomerFormProps) 
         <input type="checkbox" checked={isTaxExempt} onChange={(e) => setIsTaxExempt(e.target.checked)} className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
         <span className="text-sm text-goose-text">Tax exempt</span>
       </label>
+      </fieldset>
 
       {/* Actions */}
       <div className="flex gap-3 pt-4 border-t border-goose-border">
-        <button
-          type="submit"
-          disabled={saving || !email.trim() || !firstName.trim() || !lastName.trim()}
-          className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-        >
-          {saving && <LoadingSpinner size="sm" />}
-          {isEdit ? 'Update Customer' : 'Create Customer'}
-        </button>
+        {!readOnly && (
+          <button
+            type="submit"
+            disabled={saving || !email.trim() || !firstName.trim() || !lastName.trim()}
+            className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {saving && <LoadingSpinner size="sm" />}
+            {isEdit ? 'Update Customer' : 'Create Customer'}
+          </button>
+        )}
         <button
           type="button"
           onClick={onClose}
           disabled={saving}
           className="px-4 py-2.5 text-sm font-medium text-goose-text bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
         >
-          Cancel
+          {readOnly ? 'Close' : 'Cancel'}
         </button>
       </div>
     </form>

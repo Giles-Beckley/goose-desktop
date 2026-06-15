@@ -9,9 +9,12 @@ interface ProductFormProps {
   product?: Product | null;
   onClose: () => void;
   onSaved: () => void;
+  /** View-only mode for read-access keys: disables every input/action and
+   *  hides the save button. The form is then a detail viewer. */
+  readOnly?: boolean;
 }
 
-export function ProductForm({ product, onClose, onSaved }: ProductFormProps) {
+export function ProductForm({ product, onClose, onSaved, readOnly = false }: ProductFormProps) {
   const { callTool } = useMcp();
   const { locationsEnabled } = useConnectionStore();
   const isEdit = !!product;
@@ -705,6 +708,15 @@ export function ProductForm({ product, onClose, onSaved }: ProductFormProps) {
         <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-600 mb-4">{error}</div>
       )}
 
+      {readOnly && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-700 mb-4">
+          Your API key has read-only access to products. Editing is disabled.
+        </div>
+      )}
+
+      {/* Body — disabled wholesale in read-only mode so no write action fires */}
+      <fieldset disabled={readOnly} className="contents">
+
       {/* Tabs */}
       <div className="flex gap-1 mb-4 border-b border-goose-border">
         {tabs.map(t => (
@@ -1392,23 +1404,27 @@ export function ProductForm({ product, onClose, onSaved }: ProductFormProps) {
         )}
       </div>
 
+      </fieldset>
+
       {/* Actions (always visible) */}
       <div className="flex gap-3 pt-4 mt-4 border-t border-goose-border">
-        <button
-          type="submit"
-          disabled={saving || !name.trim()}
-          className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-        >
-          {saving && <LoadingSpinner size="sm" />}
-          {isEdit ? 'Update Product' : 'Create Product'}
-        </button>
+        {!readOnly && (
+          <button
+            type="submit"
+            disabled={saving || !name.trim()}
+            className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {saving && <LoadingSpinner size="sm" />}
+            {isEdit ? 'Update Product' : 'Create Product'}
+          </button>
+        )}
         <button
           type="button"
           onClick={onClose}
           disabled={saving}
           className="px-4 py-2.5 text-sm font-medium text-goose-text bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
         >
-          Cancel
+          {readOnly ? 'Close' : 'Cancel'}
         </button>
       </div>
     </form>

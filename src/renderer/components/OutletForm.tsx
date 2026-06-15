@@ -8,9 +8,11 @@ interface OutletFormProps {
   outlet?: Outlet | null; // null = create
   onClose: () => void;
   onSaved: () => void;
+  /** View-only mode for read-access keys: disables inputs, hides save. */
+  readOnly?: boolean;
 }
 
-export function OutletForm({ outlet, onClose, onSaved }: OutletFormProps) {
+export function OutletForm({ outlet, onClose, onSaved, readOnly = false }: OutletFormProps) {
   const { callTool } = useMcp();
   const isEdit = !!outlet;
 
@@ -145,6 +147,13 @@ export function OutletForm({ outlet, onClose, onSaved }: OutletFormProps) {
         <div className="flex justify-center py-2"><LoadingSpinner size="sm" /></div>
       )}
 
+      {readOnly && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-700">
+          Your API key has read-only access to locations. Editing is disabled.
+        </div>
+      )}
+
+      <fieldset disabled={readOnly} className="contents">
       <Field label="Name *">
         <input
           type="text"
@@ -273,23 +282,26 @@ export function OutletForm({ outlet, onClose, onSaved }: OutletFormProps) {
           </div>
         )}
       </div>
+      </fieldset>
 
       <div className="flex gap-3 pt-4 border-t border-goose-border">
-        <button
-          type="submit"
-          disabled={saving || !name.trim()}
-          className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-        >
-          {saving && <LoadingSpinner size="sm" />}
-          {isEdit ? 'Update Outlet' : 'Create Outlet'}
-        </button>
+        {!readOnly && (
+          <button
+            type="submit"
+            disabled={saving || !name.trim()}
+            className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {saving && <LoadingSpinner size="sm" />}
+            {isEdit ? 'Update Outlet' : 'Create Outlet'}
+          </button>
+        )}
         <button
           type="button"
           onClick={onClose}
           disabled={saving}
           className="px-4 py-2.5 text-sm font-medium text-goose-text bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
         >
-          Cancel
+          {readOnly ? 'Close' : 'Cancel'}
         </button>
       </div>
     </form>

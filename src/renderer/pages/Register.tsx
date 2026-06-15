@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useConnectionStore } from '../stores/connectionStore';
 import { useMcp } from '../hooks/useMcp';
+import { McpClient } from '../services/mcpClient';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { TitleBar } from '../components/TitleBar';
 
 export function Register() {
-  const { setCredentials, setOnboarded, setStatus } = useConnectionStore();
+  const { setCredentials, setOnboarded, setStatus, setAccess } = useConnectionStore();
   const { testConnection } = useMcp();
 
   const [siteUrl, setSiteUrl] = useState('');
@@ -36,6 +37,14 @@ export function Register() {
       await window.electronAPI.credentials.save({ siteUrl, apiKey: mcpApiKey });
       setCredentials(siteUrl, mcpApiKey);
       setStatus('connected');
+
+      // Read the new key's Access Group so the UI gates domains from the start.
+      try {
+        setAccess(await new McpClient(siteUrl, mcpApiKey).getAccess());
+      } catch {
+        setAccess(null);
+      }
+
       setOnboarded(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Connection failed. Check your internet connection.');

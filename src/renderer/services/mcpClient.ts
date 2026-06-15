@@ -1,4 +1,5 @@
-import type { McpRequest, McpResponse, McpTool, McpToolResult, ConnectionStatus } from '../../shared/types';
+import type { McpRequest, McpResponse, McpTool, McpToolResult, ConnectionStatus, GgmcAccess } from '../../shared/types';
+import { extractAccess } from '../../shared/access';
 
 let requestId = 0;
 
@@ -39,6 +40,32 @@ export class McpClient {
       },
     });
     return this.sendRequest(request);
+  }
+
+  /**
+   * Initialize and return the key's Access Group block (ggmcAccess). Returns
+   * null if the server doesn't advertise access info (older plugin) or the
+   * call errors — callers should treat null as "unknown / unrestricted".
+   */
+  async getAccess(): Promise<GgmcAccess | null> {
+    const response = await this.initialize();
+    if (response.error) return null;
+    return extractAccess(response.result);
+  }
+
+  /**
+   * Re-check the current key's access without a full re-init, via the
+   * `whoami` tool (returns `{ success, access: {...} }`). Returns null on error.
+   */
+  async whoami(): Promise<GgmcAccess | null> {
+    try {
+      const result = await this.callTool('whoami', {});
+      const text = result?.content?.[0]?.text;
+      if (!text) return null;
+      return extractAccess(JSON.parse(text));
+    } catch {
+      return null;
+    }
   }
 
   async listTools(): Promise<McpTool[]> {

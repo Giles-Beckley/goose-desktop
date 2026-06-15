@@ -8,6 +8,8 @@ interface OrderFormProps {
   order?: Order | null;
   onClose: () => void;
   onSaved: () => void;
+  /** View-only mode for read-access keys: disables all write actions. */
+  readOnly?: boolean;
 }
 
 interface LineItem {
@@ -38,7 +40,7 @@ const SHIPMENT_STATUSES = [
   'pending', 'label_created', 'shipped', 'in_transit', 'out_for_delivery', 'delivered', 'failed', 'returned', 'cancelled',
 ];
 
-export function OrderForm({ order, onClose, onSaved }: OrderFormProps) {
+export function OrderForm({ order, onClose, onSaved, readOnly = false }: OrderFormProps) {
   const { callTool } = useMcp();
   const isView = !!order;
 
@@ -328,7 +330,13 @@ export function OrderForm({ order, onClose, onSaved }: OrderFormProps) {
         {successMsg && (
           <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-600 mb-4">{successMsg}</div>
         )}
+        {readOnly && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-700 mb-4">
+            Your API key has read-only access to orders. Changes are disabled.
+          </div>
+        )}
 
+        <fieldset disabled={readOnly} className="contents">
         {/* Tabs */}
         <div className="flex gap-1 mb-4 border-b border-goose-border">
           <button
@@ -688,6 +696,7 @@ export function OrderForm({ order, onClose, onSaved }: OrderFormProps) {
             </>
           )}
         </div>
+        </fieldset>
       </div>
     );
   }

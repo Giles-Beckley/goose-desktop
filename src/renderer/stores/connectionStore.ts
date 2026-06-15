@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ConnectionStatus, AIStatusResponse, LicensePlanTier, LicenseValidationStatus } from '../../shared/types';
+import type { ConnectionStatus, AIStatusResponse, LicensePlanTier, LicenseValidationStatus, GgmcAccess } from '../../shared/types';
 
 interface ConnectionState {
   siteUrl: string;
@@ -28,6 +28,11 @@ interface ConnectionState {
   // Premium component gates (null = not yet probed)
   locationsEnabled: boolean | null;
   setLocationsEnabled: (enabled: boolean | null) => void;
+
+  // Access Group for the active key (null = not yet known / unrestricted).
+  // Read from initialize's ggmcAccess block; re-read whenever the key changes.
+  access: GgmcAccess | null;
+  setAccess: (access: GgmcAccess | null) => void;
 
   setSiteUrl: (url: string) => void;
   setApiKey: (key: string) => void;
@@ -71,6 +76,9 @@ export const useConnectionStore = create<ConnectionState>((set) => ({
 
   locationsEnabled: null,
   setLocationsEnabled: (enabled) => set({ locationsEnabled: enabled }),
+
+  access: null,
+  setAccess: (access) => set({ access }),
 
   setSiteUrl: (url) => set({ siteUrl: url }),
   setApiKey: (key) => set({ apiKey: key }),
@@ -119,6 +127,8 @@ export const useConnectionStore = create<ConnectionState>((set) => ({
       apiKey: '',
       status: 'disconnected',
       isOnboarded: false,
+      access: null,
+      locationsEnabled: null,
       aiConnected: false,
       aiTier: 'free',
       aiAllowedModels: [],

@@ -1,5 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import { useConnectionStore } from '../stores/connectionStore';
+import { useAccess } from '../hooks/useAccess';
+import type { AccessDomain } from '../../shared/types';
 
 interface NavItem {
   to: string;
@@ -7,26 +9,34 @@ interface NavItem {
   icon: () => JSX.Element;
   requiresLicense?: boolean;
   requiresLocations?: boolean;
+  /** Access Group domain this nav item maps to. Items with no domain are
+   *  'general' (always shown). Hidden when the key's level for it is 'none'. */
+  domain?: AccessDomain;
 }
 
 const navItems: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: DashboardIcon },
   { to: '/assistant', label: 'Assistant', icon: AssistantIcon, requiresLicense: true },
-  { to: '/products', label: 'Products', icon: ProductsIcon },
-  { to: '/orders', label: 'Orders', icon: OrdersIcon },
-  { to: '/customers', label: 'Customers', icon: CustomersIcon },
-  { to: '/locations', label: 'Locations', icon: LocationsIcon, requiresLocations: true },
-  { to: '/exports', label: 'Exports', icon: ExportsIcon },
-  { to: '/discounts', label: 'Discounts', icon: DiscountsIcon },
+  { to: '/products', label: 'Products', icon: ProductsIcon, domain: 'product' },
+  { to: '/orders', label: 'Orders', icon: OrdersIcon, domain: 'order' },
+  { to: '/customers', label: 'Customers', icon: CustomersIcon, domain: 'customer' },
+  { to: '/locations', label: 'Locations', icon: LocationsIcon, requiresLocations: true, domain: 'outlet' },
+  { to: '/exports', label: 'Exports', icon: ExportsIcon, domain: 'export' },
+  { to: '/discounts', label: 'Discounts', icon: DiscountsIcon, domain: 'discount' },
   { to: '/settings', label: 'Settings', icon: SettingsIcon },
 ];
 
 export function Sidebar() {
   const { licenseValid, locationsEnabled } = useConnectionStore();
-  // Hide items behind a feature gate only once we've definitively detected it's off
-  const visibleItems = navItems.filter(
-    (item) => !(item.requiresLocations && locationsEnabled === false),
-  );
+  const { canRead } = useAccess();
+  const visibleItems = navItems.filter((item) => {
+    // Hide items behind a premium feature gate only once detected off.
+    if (item.requiresLocations && locationsEnabled === false) return false;
+    // Hide domains the key has no access to ('none'). Items without a domain
+    // ('general' — Dashboard/Settings/Assistant) are always shown.
+    if (item.domain && !canRead(item.domain)) return false;
+    return true;
+  });
 
   return (
     <aside className="w-60 flex flex-col h-full" style={{ backgroundColor: '#1E293B' }}>

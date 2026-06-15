@@ -17,6 +17,24 @@ import { LoadingSpinner } from './components/LoadingSpinner';
 import { useConnectionStore } from './stores/connectionStore';
 import { McpClient } from './services/mcpClient';
 import { MCP_TOOLS } from '../shared/mcpTools';
+import type { GgmcAccess } from '../shared/types';
+
+/**
+ * Read the active key's Access Group (ggmcAccess) once on startup so the UI
+ * can gate domains. Errors / older plugins resolve to null (unrestricted).
+ */
+async function loadAccess(
+  siteUrl: string,
+  apiKey: string,
+  setAccess: (a: GgmcAccess | null) => void,
+): Promise<void> {
+  try {
+    const client = new McpClient(siteUrl, apiKey);
+    setAccess(await client.getAccess());
+  } catch {
+    setAccess(null);
+  }
+}
 
 /**
  * Probe the 'locations' premium component once per session.
@@ -70,7 +88,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
 }
 
 export function App() {
-  const { isOnboarded, licenseValid, setCredentials, setOnboarded, setStatus, setAiStatus, setLicense, setLocationsEnabled } = useConnectionStore();
+  const { isOnboarded, licenseValid, setCredentials, setOnboarded, setStatus, setAiStatus, setLicense, setLocationsEnabled, setAccess } = useConnectionStore();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -88,6 +106,9 @@ export function App() {
           // us whether the feature is licensed without surfacing an error to
           // the user. license_inactive => disabled; anything else => enabled.
           probeLocationsLicense(credentials.siteUrl, credentials.apiKey, setLocationsEnabled);
+
+          // Read the key's Access Group so the UI can gate domains per level.
+          loadAccess(credentials.siteUrl, credentials.apiKey, setAccess);
         }
 
         // Load and validate license key (for AI features — non-blocking)
@@ -151,7 +172,7 @@ export function App() {
       }
     }
     loadCredentials();
-  }, [setCredentials, setOnboarded, setStatus, setAiStatus, setLicense, setLocationsEnabled]);
+  }, [setCredentials, setOnboarded, setStatus, setAiStatus, setLicense, setLocationsEnabled, setAccess]);
 
   if (loading) {
     return (

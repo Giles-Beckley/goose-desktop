@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useMcp } from '../hooks/useMcp';
+import { useAccess } from '../hooks/useAccess';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { MCP_TOOLS, MCP_RESOURCES } from '../../shared/mcpTools';
 
@@ -37,6 +38,9 @@ interface PreviewData {
 
 export function Exports() {
   const { readResource, callTool } = useMcp();
+  const { canWrite } = useAccess();
+  // export_transactions is a write op; download_export / preview are reads.
+  const writable = canWrite('export');
 
   // Export history
   const [batches, setBatches] = useState<ExportBatch[]>([]);
@@ -174,7 +178,9 @@ export function Exports() {
     <div>
       <h1 className="text-2xl font-display font-bold text-goose-text mb-6">Exports</h1>
 
-      {/* New Export Card */}
+      {/* New Export Card — creating an export writes a batch (export_transactions),
+          so it's hidden for read-only export keys. History/download remain. */}
+      {writable && (
       <div className="bg-white rounded-xl border border-goose-border p-6 mb-8">
         <h2 className="text-lg font-semibold text-goose-text mb-4">New Export</h2>
 
@@ -315,6 +321,7 @@ export function Exports() {
           {exporting ? 'Exporting...' : 'Export Transactions'}
         </button>
       </div>
+      )}
 
       {/* Export History */}
       <div className="bg-white rounded-xl border border-goose-border">

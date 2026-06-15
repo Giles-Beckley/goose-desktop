@@ -45,6 +45,49 @@ export interface McpToolResult {
   isError?: boolean;
 }
 
+// === ACCESS GROUPS (ggmcAccess) ===
+
+/**
+ * Per-domain access level enforced by the store's API-key Access Group.
+ * A key with no group is unrestricted (every domain reports 'write').
+ */
+export type AccessLevel = 'none' | 'read' | 'write';
+
+/**
+ * The 15 business domains the store restricts per Access Group, plus the
+ * 'general' pseudo-domain (dispatcher tools + whoami) which is always allowed.
+ * These slugs are a stable contract — see docs/mcp-access-contract.md in the
+ * plugin repo. Additions are backwards-compatible; renames are not.
+ */
+export type AccessDomain =
+  | 'product'
+  | 'variation'
+  | 'attribute'
+  | 'inventory'
+  | 'order'
+  | 'customer'
+  | 'cart'
+  | 'discount'
+  | 'shipment'
+  | 'review'
+  | 'outlet'
+  | 'document'
+  | 'export'
+  | 'taxonomy'
+  | 'media';
+
+/**
+ * The ggmcAccess block returned in the `initialize` result (and by the
+ * `whoami` tool). When `restricted` is false the key is unrestricted and
+ * `domains` may be omitted; treat every domain as 'write'. When `restricted`
+ * is true, `domains` carries a level for every domain (missing => 'none').
+ */
+export interface GgmcAccess {
+  group_name?: string;
+  restricted: boolean;
+  domains?: Partial<Record<AccessDomain, AccessLevel>>;
+}
+
 // === AI PROXY TYPES ===
 
 export interface AIChatPayload {

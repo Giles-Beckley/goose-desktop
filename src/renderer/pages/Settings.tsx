@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useConnectionStore } from '../stores/connectionStore';
 import { useMcp } from '../hooks/useMcp';
+import { McpClient } from '../services/mcpClient';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import type { UpdaterStatus } from '../../shared/types';
 
@@ -11,7 +12,7 @@ export function Settings() {
     aiLimits, aiUsageToday, aiUsageMonth,
     licenseKey, licenseValid, licensePlanTier, licenseStatus, licenseExpiresAt, licenseEmail,
     setCredentials, clearCredentials, setOnboarded,
-    setAiStatus, setLicense, clearLicense,
+    setAiStatus, setLicense, clearLicense, setAccess,
   } = useConnectionStore();
   const { testConnection } = useMcp();
 
@@ -64,6 +65,12 @@ export function Settings() {
     const saved = await window.electronAPI.credentials.save({ siteUrl: url, apiKey: key });
     if (saved) {
       setCredentials(url, key);
+      // The key may have changed — re-read its Access Group so the UI re-gates.
+      try {
+        setAccess(await new McpClient(url, key).getAccess());
+      } catch {
+        setAccess(null);
+      }
       setMessage('Credentials saved successfully.');
     } else {
       setMessage('Failed to save credentials.');

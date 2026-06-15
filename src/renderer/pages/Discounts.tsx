@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useMcp } from '../hooks/useMcp';
+import { useAccess } from '../hooks/useAccess';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { SlideOver } from '../components/SlideOver';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -30,6 +31,8 @@ interface Discount {
 
 export function Discounts() {
   const { callTool, readResource } = useMcp();
+  const { canWrite } = useAccess();
+  const writable = canWrite('discount');
   const [discounts, setDiscounts] = useState<Discount[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -161,23 +164,25 @@ export function Discounts() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-display font-bold text-goose-text">Discounts & Vouchers</h1>
-        <div className="flex gap-2">
-          <button
-            onClick={openCreate}
-            className="px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Create Discount
-          </button>
-          <button
-            onClick={() => setShowBulkGenerate(true)}
-            className="px-4 py-2 bg-gray-100 text-goose-text text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors"
-          >
-            Bulk Vouchers
-          </button>
-        </div>
+        {writable && (
+          <div className="flex gap-2">
+            <button
+              onClick={openCreate}
+              className="px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Create Discount
+            </button>
+            <button
+              onClick={() => setShowBulkGenerate(true)}
+              className="px-4 py-2 bg-gray-100 text-goose-text text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors"
+            >
+              Bulk Vouchers
+            </button>
+          </div>
+        )}
       </div>
 
       {error && (
@@ -284,15 +289,17 @@ export function Discounts() {
                         </span>
                       </td>
                       <td className="px-6 py-3">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setDeleteTarget(d); }}
-                          className="p-1 text-goose-text-light hover:text-red-600 rounded transition-colors"
-                          title="Delete"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
+                        {writable && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setDeleteTarget(d); }}
+                            className="p-1 text-goose-text-light hover:text-red-600 rounded transition-colors"
+                            title="Delete"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))
@@ -306,13 +313,14 @@ export function Discounts() {
       <SlideOver
         open={slideOpen}
         onClose={() => setSlideOpen(false)}
-        title={selectedDiscount ? `Edit Discount: ${selectedDiscount.code}` : 'Create Discount'}
+        title={selectedDiscount ? (writable ? `Edit Discount: ${selectedDiscount.code}` : `Discount: ${selectedDiscount.code}`) : 'Create Discount'}
       >
         <DiscountForm
           key={selectedDiscount?.id ?? 'new'}
           discount={selectedDiscount}
           onClose={() => setSlideOpen(false)}
           onSaved={syncDiscounts}
+          readOnly={!writable}
         />
       </SlideOver>
 
@@ -422,10 +430,12 @@ function DiscountForm({
   discount,
   onClose,
   onSaved,
+  readOnly = false,
 }: {
   discount: Discount | null;
   onClose: () => void;
   onSaved: () => void;
+  readOnly?: boolean;
 }) {
   const { callTool } = useMcp();
   const isEdit = !!discount;
@@ -514,7 +524,13 @@ function DiscountForm({
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-600">{error}</div>
       )}
+      {readOnly && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-700">
+          Your API key has read-only access to discounts. Editing is disabled.
+        </div>
+      )}
 
+      <fieldset disabled={readOnly} className="contents">
       <div className="grid grid-cols-2 gap-4">
         <Field label="Code *">
           <input
@@ -626,22 +642,26 @@ function DiscountForm({
         )}
       </div>
 
+      </fieldset>
+
       <div className="flex gap-3 pt-4 border-t border-goose-border">
-        <button
-          type="submit"
-          disabled={saving || !code.trim() || !name.trim() || !amount}
-          className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-        >
-          {saving && <LoadingSpinner size="sm" />}
-          {isEdit ? 'Update Discount' : 'Create Discount'}
-        </button>
+        {!readOnly && (
+          <button
+            type="submit"
+            disabled={saving || !code.trim() || !name.trim() || !amount}
+            className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {saving && <LoadingSpinner size="sm" />}
+            {isEdit ? 'Update Discount' : 'Create Discount'}
+          </button>
+        )}
         <button
           type="button"
           onClick={onClose}
           disabled={saving}
           className="px-4 py-2.5 text-sm font-medium text-goose-text bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
         >
-          Cancel
+          {readOnly ? 'Close' : 'Cancel'}
         </button>
       </div>
     </form>

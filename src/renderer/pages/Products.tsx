@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useMcp } from '../hooks/useMcp';
+import { useAccess } from '../hooks/useAccess';
 import { useProductsStore } from '../stores/productsStore';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { SlideOver } from '../components/SlideOver';
@@ -11,6 +12,8 @@ import type { Product } from '../../shared/types';
 
 export function Products() {
   const { callTool } = useMcp();
+  const { canWrite } = useAccess();
+  const writable = canWrite('product');
   const { products, loading, error, setProducts, setLoading, setError } = useProductsStore();
   const [search, setSearch] = useState('');
 
@@ -81,15 +84,17 @@ export function Products() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-display font-bold text-goose-text">Products</h1>
         <div className="flex gap-2">
-          <button
-            onClick={openCreate}
-            className="px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Add Product
-          </button>
+          {writable && (
+            <button
+              onClick={openCreate}
+              className="px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Add Product
+            </button>
+          )}
           <button
             onClick={syncProducts}
             disabled={loading}
@@ -154,15 +159,17 @@ export function Products() {
                       </span>
                     </td>
                     <td className="px-6 py-3">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setDeleteTarget(p); }}
-                        className="p-1 text-goose-text-light hover:text-red-600 rounded transition-colors"
-                        title="Delete"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
+                      {writable && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setDeleteTarget(p); }}
+                          className="p-1 text-goose-text-light hover:text-red-600 rounded transition-colors"
+                          title="Delete"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -183,13 +190,14 @@ export function Products() {
       <SlideOver
         open={slideOpen}
         onClose={() => setSlideOpen(false)}
-        title={selectedProduct ? 'Edit Product' : 'Add Product'}
+        title={selectedProduct ? (writable ? 'Edit Product' : 'Product Details') : 'Add Product'}
         wide
       >
         <ProductForm
           product={selectedProduct}
           onClose={() => setSlideOpen(false)}
           onSaved={syncProducts}
+          readOnly={!writable}
         />
       </SlideOver>
 
