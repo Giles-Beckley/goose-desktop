@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useMcp } from '../hooks/useMcp';
 import { MCP_TOOLS } from '../../shared/mcpTools';
 import { LoadingSpinner } from './LoadingSpinner';
-import type { Order, Product, Shipment } from '../../shared/types';
+import type { Order, Product, Shipment, Customer } from '../../shared/types';
 
 interface OrderFormProps {
   order?: Order | null;
@@ -16,6 +16,24 @@ interface LineItem {
   product_id: number;
   product_name: string;
   quantity: number;
+  /** Unit price from the product catalogue. Used as the default and shown
+   *  as the placeholder; the store recalculates from this product unless an
+   *  override is supplied. */
+  price: number;
+  /** Admin unit-price override (empty string = no override). Sent to the
+   *  plugin as `price_override` on the line item. */
+  priceOverride: string;
+}
+
+/** Minimal shape of a customer's saved address from get_customer. */
+interface CustomerAddress {
+  address_type: string;
+  address_line_1?: string;
+  address_line_2?: string;
+  city?: string;
+  state?: string;
+  postcode?: string;
+  country?: string;
 }
 
 const ORDER_STATUSES = [
@@ -51,6 +69,14 @@ export function OrderForm({ order, onClose, onSaved, readOnly = false }: OrderFo
   const [phone, setPhone] = useState('');
   const [notes, setNotes] = useState('');
 
+  // Customer picker (create mode) — search existing, fall back to manual entry.
+  // When a customer is selected we bind to them and lock the manual fields;
+  // "Enter new customer" clears the binding and re-enables manual input.
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [customerResults, setCustomerResults] = useState<Customer[]>([]);
+  const [searchingCustomers, setSearchingCustomers] = useState(false);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
+
   // Billing address (create mode)
   const [billingAddress1, setBillingAddress1] = useState('');
   const [billingAddress2, setBillingAddress2] = useState('');
@@ -58,6 +84,30 @@ export function OrderForm({ order, onClose, onSaved, readOnly = false }: OrderFo
   const [billingState, setBillingState] = useState('');
   const [billingPostcode, setBillingPostcode] = useState('');
   const [billingCountry, setBillingCountry] = useState('');
+
+  // Shipping address (create mode). When `shipSameAsBilling` is true the
+  // shipping_* fields are omitted and the store falls back to billing.
+  const [shipSameAsBilling, setShipSameAsBilling] = useState(true);
+  const [shippingAddress1, setShippingAddress1] = useState('');
+  const [shippingAddress2, setShippingAddress2] = useState('');
+  const [shippingCity, setShippingCity] = useState('');
+  const [shippingState, setShippingState] = useState('');
+  const [shippingPostcode, setShippingPostcode] = useState('');
+  const [shippingCountry, setShippingCountry] = useState('');
+
+  // Tax (create mode). Tax is always computed server-side from the store's
+  // rules; the only lever exposed here is the B2B tax-exemption path
+  // (is_business + tax_id) honoured by GGM_Commerce_Orders::create_order().
+  const [isBusiness, setIsBusiness] = useState(false);
+  const [taxId, setTaxId] = useState('');
+
+  // Order-level overrides (create mode). All optional; the plugin's
+  // create_order honours them via its $options parameter. Empty => the store
+  // calculates/defaults as normal.
+  const [discountCode, setDiscountCode] = useState('');
+  const [shippingAmount, setShippingAmount] = useState(''); // '' => store-calculated
+  const [createStatus, setCreateStatus] = useState('pending');
+  const [createPaymentStatus, setCreatePaymentStatus] = useState('pending');
 
   // Line items (create mode)
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
@@ -111,6 +161,87 @@ export function OrderForm({ order, onClose, onSaved, readOnly = false }: OrderFo
     }
   };
 
+  const searchCustomers = async (term: string) => {
+    setCustomerSearch(term);
+    if (term.length < 2) {
+      setCustomerResults([]);
+      return;
+    }
+    setSearchingCustomers(true);
+    try {
+      const result = await callTool(MCP_TOOLS.LIST_CUSTOMERS, { search: term, limit: 10 });
+      const text = result?.content?.[0]?.text;
+      if (text) {
+        const data = JSON.parse(text);
+        const items = Array.isArray(data) ? data : data.customers ?? [];
+        setCustomerResults(items as Customer[]);
+      }
+    } catch {
+      setCustomerResults([]);
+    } finally {
+      setSearchingCustomers(false);
+    }
+  };
+
+  const selectCustomer = async (customer: Customer) => {
+    setSelectedCustomerId(customer.id);
+    setEmail(customer.email ?? '');
+    setFirstName(customer.first_name ?? '');
+    setLastName(customer.last_name ?? '');
+    setPhone(customer.phone ?? '');
+    setIsBusiness(customer.account_type === 'business' || !!customer.is_tax_exempt);
+    setTaxId(customer.tax_id ?? '');
+    setCustomerSearch('');
+    setCustomerResults([]);
+
+    // Pull saved addresses to prefill billing/shipping.
+    try {
+      const result = await callTool(MCP_TOOLS.GET_CUSTOMER, { customer_id: customer.id });
+      const text = result?.content?.[0]?.text;
+      if (text) {
+        const data = JSON.parse(text);
+        const addresses: CustomerAddress[] = data.customer?.addresses ?? [];
+        const billing = addresses.find(a => a.address_type === 'billing') ?? addresses[0];
+        const shipping = addresses.find(a => a.address_type === 'shipping');
+        if (billing) applyBilling(billing);
+        if (shipping) {
+          setShipSameAsBilling(false);
+          applyShipping(shipping);
+        }
+      }
+    } catch {
+      // Address prefill is best-effort; manual fields stay editable.
+    }
+  };
+
+  const applyBilling = (a: CustomerAddress) => {
+    setBillingAddress1(a.address_line_1 ?? '');
+    setBillingAddress2(a.address_line_2 ?? '');
+    setBillingCity(a.city ?? '');
+    setBillingState(a.state ?? '');
+    setBillingPostcode(a.postcode ?? '');
+    setBillingCountry(a.country ?? '');
+  };
+
+  const applyShipping = (a: CustomerAddress) => {
+    setShippingAddress1(a.address_line_1 ?? '');
+    setShippingAddress2(a.address_line_2 ?? '');
+    setShippingCity(a.city ?? '');
+    setShippingState(a.state ?? '');
+    setShippingPostcode(a.postcode ?? '');
+    setShippingCountry(a.country ?? '');
+  };
+
+  const clearCustomer = () => {
+    setSelectedCustomerId(null);
+    setEmail('');
+    setFirstName('');
+    setLastName('');
+    setPhone('');
+    setIsBusiness(false);
+    setTaxId('');
+  };
+
   const searchProducts = async (term: string) => {
     setProductSearch(term);
     if (term.length < 2) {
@@ -141,7 +272,8 @@ export function OrderForm({ order, onClose, onSaved, readOnly = false }: OrderFo
         li.product_id === product.id ? { ...li, quantity: li.quantity + 1 } : li
       ));
     } else {
-      setLineItems([...lineItems, { product_id: product.id, product_name: product.name, quantity: 1 }]);
+      const price = parseFloat(product.sale_price || product.price) || 0;
+      setLineItems([...lineItems, { product_id: product.id, product_name: product.name, quantity: 1, price, priceOverride: '' }]);
     }
     setProductSearch('');
     setProductResults([]);
@@ -157,8 +289,21 @@ export function OrderForm({ order, onClose, onSaved, readOnly = false }: OrderFo
     }
   };
 
+  const updatePriceOverride = (productId: number, value: string) => {
+    setLineItems(lineItems.map(li =>
+      li.product_id === productId ? { ...li, priceOverride: value } : li
+    ));
+  };
+
   const removeLineItem = (productId: number) => {
     setLineItems(lineItems.filter(li => li.product_id !== productId));
+  };
+
+  /** Effective unit price for a line: override if a valid one is set, else
+   *  the catalogue price. Used for the subtotal preview. */
+  const effectivePrice = (li: LineItem): number => {
+    const o = parseFloat(li.priceOverride);
+    return li.priceOverride.trim() !== '' && !isNaN(o) && o >= 0 ? o : li.price;
   };
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -182,11 +327,46 @@ export function OrderForm({ order, onClose, onSaved, readOnly = false }: OrderFo
       if (billingPostcode.trim()) customer.billing_postcode = billingPostcode.trim();
       if (billingCountry.trim()) customer.billing_country = billingCountry.trim();
 
+      // Shipping address. When "same as billing" is on we omit shipping_*
+      // entirely; the store falls back to the billing values on create.
+      if (!shipSameAsBilling) {
+        if (shippingAddress1.trim()) customer.shipping_address_1 = shippingAddress1.trim();
+        if (shippingAddress2.trim()) customer.shipping_address_2 = shippingAddress2.trim();
+        if (shippingCity.trim()) customer.shipping_city = shippingCity.trim();
+        if (shippingState.trim()) customer.shipping_state = shippingState.trim();
+        if (shippingPostcode.trim()) customer.shipping_postcode = shippingPostcode.trim();
+        if (shippingCountry.trim()) customer.shipping_country = shippingCountry.trim();
+      }
+
+      // B2B tax exemption — the only tax lever create_order honours. Tax
+      // itself is always computed server-side from the store's rules.
+      if (isBusiness) {
+        customer.is_business = 'true';
+        if (taxId.trim()) customer.tax_id = taxId.trim();
+      }
+
       const args: Record<string, unknown> = {
         customer,
-        items: lineItems.map(li => ({ product_id: li.product_id, quantity: li.quantity })),
+        // product_id + quantity are required; price_override is optional and
+        // only sent when the admin typed a valid non-negative figure.
+        items: lineItems.map(li => {
+          const item: Record<string, unknown> = { product_id: li.product_id, quantity: li.quantity };
+          const override = parseFloat(li.priceOverride);
+          if (li.priceOverride.trim() !== '' && !isNaN(override) && override >= 0) {
+            item.price_override = override;
+          }
+          return item;
+        }),
       };
       if (notes.trim()) args.notes = notes.trim();
+
+      // Order-level overrides, honoured by create_order's $options. Each is
+      // omitted unless explicitly set so the store keeps its defaults.
+      if (discountCode.trim()) args.discount_code = discountCode.trim();
+      const ship = parseFloat(shippingAmount);
+      if (shippingAmount.trim() !== '' && !isNaN(ship) && ship >= 0) args.shipping_amount = ship;
+      if (createStatus !== 'pending') args.status = createStatus;
+      if (createPaymentStatus !== 'pending') args.payment_status = createPaymentStatus;
 
       await callTool(MCP_TOOLS.CREATE_ORDER, args);
       onSaved();
@@ -710,22 +890,90 @@ export function OrderForm({ order, onClose, onSaved, readOnly = false }: OrderFo
 
       <h3 className="text-sm font-display font-semibold text-goose-text">Customer</h3>
 
+      {/* Existing-customer picker. Selecting one binds the order to that
+          customer and prefills (and locks) the manual fields below. */}
+      {selectedCustomerId === null ? (
+        <div className="relative">
+          <input
+            type="text"
+            value={customerSearch}
+            onChange={(e) => searchCustomers(e.target.value)}
+            placeholder="Find existing customer by name, email, or phone..."
+            className="input"
+          />
+          {searchingCustomers && (
+            <div className="absolute right-3 top-2.5">
+              <LoadingSpinner size="sm" />
+            </div>
+          )}
+          {customerResults.length > 0 && (
+            <div className="absolute z-10 w-full mt-1 bg-white border border-goose-border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+              {customerResults.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => selectCustomer(c)}
+                  className="w-full px-4 py-2.5 text-left text-sm hover:bg-gray-50"
+                >
+                  <span className="text-goose-text">{`${c.first_name} ${c.last_name}`.trim() || c.email}</span>
+                  <span className="block text-xs text-goose-text-light">
+                    {c.email}{c.total_orders ? ` · ${c.total_orders} orders` : ''}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+          <p className="mt-1 text-xs text-goose-text-light">Or enter the customer details below to create a new one.</p>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between bg-primary-50 border border-primary-100 rounded-lg px-4 py-2.5">
+          <div className="text-sm">
+            <span className="font-medium text-goose-text">{`${firstName} ${lastName}`.trim() || email}</span>
+            <span className="block text-xs text-goose-text-light">Existing customer · {email}</span>
+          </div>
+          <button
+            type="button"
+            onClick={clearCustomer}
+            className="text-xs font-medium text-primary-700 hover:underline"
+          >
+            Enter new customer
+          </button>
+        </div>
+      )}
+
       <Field label="Email *">
-        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="input" placeholder="customer@example.com" />
+        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required disabled={selectedCustomerId !== null} className="input disabled:bg-gray-50 disabled:text-goose-text-light" placeholder="customer@example.com" />
       </Field>
 
       <div className="grid grid-cols-2 gap-4">
         <Field label="First name *">
-          <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} required className="input" />
+          <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} required disabled={selectedCustomerId !== null} className="input disabled:bg-gray-50 disabled:text-goose-text-light" />
         </Field>
         <Field label="Last name *">
-          <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} required className="input" />
+          <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} required disabled={selectedCustomerId !== null} className="input disabled:bg-gray-50 disabled:text-goose-text-light" />
         </Field>
       </div>
 
       <Field label="Phone">
-        <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className="input" />
+        <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} disabled={selectedCustomerId !== null} className="input disabled:bg-gray-50 disabled:text-goose-text-light" />
       </Field>
+
+      {/* Tax handling: store computes tax automatically. The only lever is
+          B2B exemption (business customer + tax ID). */}
+      <div className="rounded-lg border border-goose-border p-3 space-y-2">
+        <label className="flex items-center gap-2 text-sm text-goose-text">
+          <input type="checkbox" checked={isBusiness} onChange={(e) => setIsBusiness(e.target.checked)} className="rounded" />
+          Business customer (B2B)
+        </label>
+        {isBusiness && (
+          <Field label="Tax ID / VAT number">
+            <input type="text" value={taxId} onChange={(e) => setTaxId(e.target.value)} className="input" placeholder="e.g. GB123456789" />
+          </Field>
+        )}
+        <p className="text-xs text-goose-text-light">
+          Tax is calculated automatically by the store on creation. A valid business tax ID may make the order tax-exempt.
+        </p>
+      </div>
 
       {/* Billing address */}
       <div className="pt-4 border-t border-goose-border">
@@ -755,6 +1003,44 @@ export function OrderForm({ order, onClose, onSaved, readOnly = false }: OrderFo
             </Field>
           </div>
         </div>
+      </div>
+
+      {/* Shipping address */}
+      <div className="pt-4 border-t border-goose-border">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-display font-semibold text-goose-text">Shipping Address</h3>
+          <label className="flex items-center gap-2 text-xs text-goose-text-light">
+            <input type="checkbox" checked={shipSameAsBilling} onChange={(e) => setShipSameAsBilling(e.target.checked)} className="rounded" />
+            Same as billing
+          </label>
+        </div>
+
+        {!shipSameAsBilling && (
+          <div className="space-y-3">
+            <Field label="Address line 1">
+              <input type="text" value={shippingAddress1} onChange={(e) => setShippingAddress1(e.target.value)} className="input" />
+            </Field>
+            <Field label="Address line 2">
+              <input type="text" value={shippingAddress2} onChange={(e) => setShippingAddress2(e.target.value)} className="input" />
+            </Field>
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="City">
+                <input type="text" value={shippingCity} onChange={(e) => setShippingCity(e.target.value)} className="input" />
+              </Field>
+              <Field label="County / State">
+                <input type="text" value={shippingState} onChange={(e) => setShippingState(e.target.value)} className="input" />
+              </Field>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="Postcode">
+                <input type="text" value={shippingPostcode} onChange={(e) => setShippingPostcode(e.target.value)} className="input" />
+              </Field>
+              <Field label="Country">
+                <input type="text" value={shippingCountry} onChange={(e) => setShippingCountry(e.target.value)} className="input" />
+              </Field>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Line items */}
@@ -799,7 +1085,23 @@ export function OrderForm({ order, onClose, onSaved, readOnly = false }: OrderFo
           <div className="border border-goose-border rounded-lg divide-y divide-goose-border">
             {lineItems.map((li) => (
               <div key={li.product_id} className="flex items-center gap-3 px-4 py-2.5">
-                <span className="flex-1 text-sm text-goose-text">{li.product_name}</span>
+                <div className="flex-1 min-w-0">
+                  <span className="block text-sm text-goose-text truncate">{li.product_name}</span>
+                  <span className="text-xs text-goose-text-light">Catalogue: ${li.price.toFixed(2)} each</span>
+                </div>
+                <div className="relative">
+                  <span className="absolute left-2 top-1.5 text-xs text-goose-text-light">$</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={li.priceOverride}
+                    onChange={(e) => updatePriceOverride(li.product_id, e.target.value)}
+                    placeholder={li.price.toFixed(2)}
+                    title="Unit price override (leave blank to use catalogue price)"
+                    className="w-24 pl-5 pr-2 py-1 border border-goose-border rounded text-sm text-right"
+                  />
+                </div>
                 <input
                   type="number"
                   min="1"
@@ -807,6 +1109,7 @@ export function OrderForm({ order, onClose, onSaved, readOnly = false }: OrderFo
                   onChange={(e) => updateQuantity(li.product_id, parseInt(e.target.value, 10) || 1)}
                   className="w-16 px-2 py-1 border border-goose-border rounded text-sm text-center"
                 />
+                <span className="w-20 text-right text-sm font-medium text-goose-text">${(effectivePrice(li) * li.quantity).toFixed(2)}</span>
                 <button
                   type="button"
                   onClick={() => removeLineItem(li.product_id)}
@@ -818,10 +1121,70 @@ export function OrderForm({ order, onClose, onSaved, readOnly = false }: OrderFo
                 </button>
               </div>
             ))}
+            <div className="flex justify-between px-4 py-2.5 bg-gray-50 text-sm">
+              <span className="text-goose-text-light">Subtotal (before tax &amp; shipping)</span>
+              <span className="font-medium text-goose-text">
+                ${lineItems.reduce((sum, li) => sum + effectivePrice(li) * li.quantity, 0).toFixed(2)}
+              </span>
+            </div>
           </div>
         ) : (
           <p className="text-sm text-goose-text-light text-center py-4">No items added yet. Search for products above.</p>
         )}
+      </div>
+
+      {/* Discount & shipping */}
+      <div className="pt-4 border-t border-goose-border space-y-3">
+        <h3 className="text-sm font-display font-semibold text-goose-text">Discount &amp; Shipping</h3>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Discount code">
+            <input
+              type="text"
+              value={discountCode}
+              onChange={(e) => setDiscountCode(e.target.value)}
+              className="input"
+              placeholder="e.g. SAVE10"
+            />
+          </Field>
+          <Field label="Shipping amount">
+            <div className="relative">
+              <span className="absolute left-3 top-2.5 text-sm text-goose-text-light">$</span>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={shippingAmount}
+                onChange={(e) => setShippingAmount(e.target.value)}
+                className="input pl-7"
+                placeholder="Auto"
+              />
+            </div>
+          </Field>
+        </div>
+        <p className="text-xs text-goose-text-light">
+          Leave shipping blank to let the store calculate it. An invalid discount code will block creation.
+        </p>
+      </div>
+
+      {/* Initial status */}
+      <div className="pt-4 border-t border-goose-border space-y-3">
+        <h3 className="text-sm font-display font-semibold text-goose-text">Initial Status</h3>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Order status">
+            <select value={createStatus} onChange={(e) => setCreateStatus(e.target.value)} className="input">
+              {ORDER_STATUSES.map(s => (
+                <option key={s.value} value={s.value}>{s.label}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Payment status">
+            <select value={createPaymentStatus} onChange={(e) => setCreatePaymentStatus(e.target.value)} className="input">
+              {PAYMENT_STATUSES.map(s => (
+                <option key={s.value} value={s.value}>{s.label}</option>
+              ))}
+            </select>
+          </Field>
+        </div>
       </div>
 
       <Field label="Order notes">

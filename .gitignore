@@ -6,3 +6,8 @@ Thumbs.db
 .env
 .env.local
 release/
+dist/
+
+# Local-only files (never commit secrets)
+GitHub.txt
+.claude/settings.local.json
