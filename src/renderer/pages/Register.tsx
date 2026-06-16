@@ -6,7 +6,7 @@ import { LoadingSpinner } from '../components/LoadingSpinner';
 import { TitleBar } from '../components/TitleBar';
 
 export function Register() {
-  const { setCredentials, setOnboarded, setStatus, setAccess, setCurrency } = useConnectionStore();
+  const { setCredentials, setOnboarded, setStatus, setAccess, setCurrency, setAddressSettings } = useConnectionStore();
   const { testConnection } = useMcp();
 
   const [siteUrl, setSiteUrl] = useState('');
@@ -42,8 +42,9 @@ export function Register() {
       try {
         const client = new McpClient(siteUrl, mcpApiKey);
         setAccess(await client.getAccess());
-        const currency = await client.getCurrency();
-        if (currency) setCurrency(currency);
+        const settings = await client.getStoreSettings();
+        if (settings.currency) setCurrency(settings.currency);
+        if (settings.addresses) setAddressSettings(settings.addresses);
       } catch {
         setAccess(null);
       }

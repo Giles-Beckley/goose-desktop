@@ -36,6 +36,32 @@ export const DEFAULT_CURRENCY: Currency = {
   decimals: 2,
 };
 
+/**
+ * Address capabilities from the store (get_store_settings `addresses` block).
+ * Controls whether the customer form offers a single billing/shipping address
+ * each or a multi-address list per type.
+ */
+export interface AddressSettings {
+  allow_multiple_billing: boolean;
+  allow_multiple_shipping: boolean;
+}
+
+/** Conservative default for older plugins that don't expose the block. */
+export const DEFAULT_ADDRESS_SETTINGS: AddressSettings = {
+  allow_multiple_billing: false,
+  allow_multiple_shipping: false,
+};
+
+/** Coerce the get_store_settings `addresses` block into AddressSettings. */
+export function toAddressSettings(raw: unknown): AddressSettings {
+  if (!raw || typeof raw !== 'object') return DEFAULT_ADDRESS_SETTINGS;
+  const a = raw as Record<string, unknown>;
+  return {
+    allow_multiple_billing: a.allow_multiple_billing === true,
+    allow_multiple_shipping: a.allow_multiple_shipping === true,
+  };
+}
+
 /** Coerce an unknown payload (e.g. from get_store_settings) into a Currency. */
 export function toCurrency(raw: unknown): Currency {
   if (!raw || typeof raw !== 'object') return DEFAULT_CURRENCY;

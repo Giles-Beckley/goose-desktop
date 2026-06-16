@@ -18,7 +18,7 @@ import { useConnectionStore } from './stores/connectionStore';
 import { McpClient } from './services/mcpClient';
 import { MCP_TOOLS } from '../shared/mcpTools';
 import type { GgmcAccess } from '../shared/types';
-import type { Currency } from '../shared/currency';
+import type { Currency, AddressSettings } from '../shared/currency';
 
 /**
  * Read the active key's Access Group (ggmcAccess) once on startup so the UI
@@ -38,17 +38,20 @@ async function loadAccess(
 }
 
 /**
- * Read the store's currency settings once on connect via get_store_settings.
- * Older plugins without the tool (or any error) leave the default (USD/$), so
- * money still renders — just not localised.
+ * Read the store's settings (currency + address capabilities) once on connect
+ * via get_store_settings. Older plugins without the tool (or any error) leave
+ * the defaults (USD/$, single-address), so the UI still works — just not
+ * localised / adaptive.
  */
-async function loadCurrency(
+async function loadStoreSettings(
   siteUrl: string,
   apiKey: string,
   setCurrency: (c: Currency) => void,
+  setAddressSettings: (a: AddressSettings) => void,
 ): Promise<void> {
-  const currency = await new McpClient(siteUrl, apiKey).getCurrency();
-  if (currency) setCurrency(currency);
+  const settings = await new McpClient(siteUrl, apiKey).getStoreSettings();
+  if (settings.currency) setCurrency(settings.currency);
+  if (settings.addresses) setAddressSettings(settings.addresses);
 }
 
 /**
@@ -103,7 +106,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
 }
 
 export function App() {
-  const { isOnboarded, licenseValid, setCredentials, setOnboarded, setStatus, setAiStatus, setLicense, setLocationsEnabled, setAccess, setCurrency } = useConnectionStore();
+  const { isOnboarded, licenseValid, setCredentials, setOnboarded, setStatus, setAiStatus, setLicense, setLocationsEnabled, setAccess, setCurrency, setAddressSettings } = useConnectionStore();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -125,8 +128,8 @@ export function App() {
           // Read the key's Access Group so the UI can gate domains per level.
           loadAccess(credentials.siteUrl, credentials.apiKey, setAccess);
 
-          // Read the store currency so money renders in the store's format.
-          loadCurrency(credentials.siteUrl, credentials.apiKey, setCurrency);
+          // Read store settings (currency + address capabilities) on connect.
+          loadStoreSettings(credentials.siteUrl, credentials.apiKey, setCurrency, setAddressSettings);
         }
 
         // Load and validate license key (for AI features — non-blocking)
@@ -190,7 +193,7 @@ export function App() {
       }
     }
     loadCredentials();
-  }, [setCredentials, setOnboarded, setStatus, setAiStatus, setLicense, setLocationsEnabled, setAccess, setCurrency]);
+  }, [setCredentials, setOnboarded, setStatus, setAiStatus, setLicense, setLocationsEnabled, setAccess, setCurrency, setAddressSettings]);
 
   if (loading) {
     return (

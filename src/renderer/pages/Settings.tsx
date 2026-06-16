@@ -12,7 +12,7 @@ export function Settings() {
     aiLimits, aiUsageToday, aiUsageMonth,
     licenseKey, licenseValid, licensePlanTier, licenseStatus, licenseExpiresAt, licenseEmail,
     setCredentials, clearCredentials, setOnboarded,
-    setAiStatus, setLicense, clearLicense, setAccess, setCurrency,
+    setAiStatus, setLicense, clearLicense, setAccess, setCurrency, setAddressSettings,
   } = useConnectionStore();
   const { testConnection } = useMcp();
 
@@ -70,8 +70,9 @@ export function Settings() {
       try {
         const client = new McpClient(url, key);
         setAccess(await client.getAccess());
-        const currency = await client.getCurrency();
-        if (currency) setCurrency(currency);
+        const settings = await client.getStoreSettings();
+        if (settings.currency) setCurrency(settings.currency);
+        if (settings.addresses) setAddressSettings(settings.addresses);
       } catch {
         setAccess(null);
       }

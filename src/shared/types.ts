@@ -440,6 +440,27 @@ export interface Shipment {
   updated_at?: string;
 }
 
+// A saved customer address (billing or shipping). Returned by get_customer in
+// the customer.addresses array; also created/updated via the *_customer_address
+// MCP tools. The field names here are the MCP API names (address_line_1 etc.),
+// which the plugin maps to its DB columns internally.
+export interface CustomerAddress {
+  id?: number;
+  address_type: 'billing' | 'shipping';
+  address_name?: string;
+  first_name?: string;
+  last_name?: string;
+  company?: string;
+  address_line_1?: string;
+  address_line_2?: string;
+  city?: string;
+  state?: string;
+  postcode?: string;
+  country?: string;
+  phone?: string;
+  is_default?: boolean;
+}
+
 // Customer type (GGM Commerce schema)
 export interface Customer {
   id: number;
@@ -456,6 +477,8 @@ export interface Customer {
   total_spent: number;
   last_order_date?: string;
   created_at: string;
+  // Only populated by get_customer (not by list_customers).
+  addresses?: CustomerAddress[];
 }
 
 // Dashboard stats

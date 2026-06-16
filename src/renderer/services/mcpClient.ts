@@ -1,7 +1,12 @@
 import type { McpRequest, McpResponse, McpTool, McpToolResult, ConnectionStatus, GgmcAccess } from '../../shared/types';
 import { extractAccess } from '../../shared/access';
-import type { Currency } from '../../shared/currency';
-import { toCurrency } from '../../shared/currency';
+import type { Currency, AddressSettings } from '../../shared/currency';
+import { toCurrency, toAddressSettings } from '../../shared/currency';
+
+export interface StoreSettings {
+  currency: Currency | null;
+  addresses: AddressSettings | null;
+}
 
 let requestId = 0;
 
@@ -76,15 +81,27 @@ export class McpClient {
    * should fall back to the default currency.
    */
   async getCurrency(): Promise<Currency | null> {
+    return (await this.getStoreSettings()).currency;
+  }
+
+  /**
+   * Initialize and return the store's settings (currency + address capabilities)
+   * via get_store_settings. Each field is null if absent (older plugin) or on
+   * error — callers should fall back to their own defaults.
+   */
+  async getStoreSettings(): Promise<StoreSettings> {
     try {
       await this.initialize();
       const result = await this.callTool('get_store_settings', {});
       const text = result?.content?.[0]?.text;
-      if (!text) return null;
+      if (!text) return { currency: null, addresses: null };
       const data = JSON.parse(text);
-      return data?.currency ? toCurrency(data.currency) : null;
+      return {
+        currency: data?.currency ? toCurrency(data.currency) : null,
+        addresses: data?.addresses ? toAddressSettings(data.addresses) : null,
+      };
     } catch {
-      return null;
+      return { currency: null, addresses: null };
     }
   }
 

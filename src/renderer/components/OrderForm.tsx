@@ -4,7 +4,7 @@ import { useConnectionStore } from '../stores/connectionStore';
 import { formatCurrency } from '../../shared/currency';
 import { MCP_TOOLS } from '../../shared/mcpTools';
 import { LoadingSpinner } from './LoadingSpinner';
-import type { Order, Product, Shipment, Customer } from '../../shared/types';
+import type { Order, Product, Shipment, Customer, CustomerAddress } from '../../shared/types';
 
 interface OrderFormProps {
   order?: Order | null;
@@ -25,17 +25,6 @@ interface LineItem {
   /** Admin unit-price override (empty string = no override). Sent to the
    *  plugin as `price_override` on the line item. */
   priceOverride: string;
-}
-
-/** Minimal shape of a customer's saved address from get_customer. */
-interface CustomerAddress {
-  address_type: string;
-  address_line_1?: string;
-  address_line_2?: string;
-  city?: string;
-  state?: string;
-  postcode?: string;
-  country?: string;
 }
 
 const ORDER_STATUSES = [

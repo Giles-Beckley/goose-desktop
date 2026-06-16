@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { ConnectionStatus, AIStatusResponse, LicensePlanTier, LicenseValidationStatus, GgmcAccess } from '../../shared/types';
-import type { Currency } from '../../shared/currency';
-import { DEFAULT_CURRENCY } from '../../shared/currency';
+import type { Currency, AddressSettings } from '../../shared/currency';
+import { DEFAULT_CURRENCY, DEFAULT_ADDRESS_SETTINGS } from '../../shared/currency';
 
 interface ConnectionState {
   siteUrl: string;
@@ -40,6 +40,11 @@ interface ConnectionState {
   // until fetched; stays at default on older plugins that lack the tool.
   currency: Currency;
   setCurrency: (currency: Currency) => void;
+
+  // Store address capabilities (from get_store_settings). Defaults to single
+  // billing/shipping until fetched / on older plugins.
+  addressSettings: AddressSettings;
+  setAddressSettings: (addresses: AddressSettings) => void;
 
   setSiteUrl: (url: string) => void;
   setApiKey: (key: string) => void;
@@ -90,6 +95,9 @@ export const useConnectionStore = create<ConnectionState>((set) => ({
   currency: DEFAULT_CURRENCY,
   setCurrency: (currency) => set({ currency }),
 
+  addressSettings: DEFAULT_ADDRESS_SETTINGS,
+  setAddressSettings: (addresses) => set({ addressSettings: addresses }),
+
   setSiteUrl: (url) => set({ siteUrl: url }),
   setApiKey: (key) => set({ apiKey: key }),
   setStatus: (status) => set({ status }),
@@ -139,6 +147,7 @@ export const useConnectionStore = create<ConnectionState>((set) => ({
       isOnboarded: false,
       access: null,
       currency: DEFAULT_CURRENCY,
+      addressSettings: DEFAULT_ADDRESS_SETTINGS,
       locationsEnabled: null,
       aiConnected: false,
       aiTier: 'free',
