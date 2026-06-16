@@ -1,5 +1,7 @@
 import type { McpRequest, McpResponse, McpTool, McpToolResult, ConnectionStatus, GgmcAccess } from '../../shared/types';
 import { extractAccess } from '../../shared/access';
+import type { Currency } from '../../shared/currency';
+import { toCurrency } from '../../shared/currency';
 
 let requestId = 0;
 
@@ -63,6 +65,24 @@ export class McpClient {
       const text = result?.content?.[0]?.text;
       if (!text) return null;
       return extractAccess(JSON.parse(text));
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Initialize and return the store's currency settings via get_store_settings.
+   * Returns null if the plugin lacks the tool or the call errors — callers
+   * should fall back to the default currency.
+   */
+  async getCurrency(): Promise<Currency | null> {
+    try {
+      await this.initialize();
+      const result = await this.callTool('get_store_settings', {});
+      const text = result?.content?.[0]?.text;
+      if (!text) return null;
+      const data = JSON.parse(text);
+      return data?.currency ? toCurrency(data.currency) : null;
     } catch {
       return null;
     }

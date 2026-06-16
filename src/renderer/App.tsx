@@ -18,6 +18,7 @@ import { useConnectionStore } from './stores/connectionStore';
 import { McpClient } from './services/mcpClient';
 import { MCP_TOOLS } from '../shared/mcpTools';
 import type { GgmcAccess } from '../shared/types';
+import type { Currency } from '../shared/currency';
 
 /**
  * Read the active key's Access Group (ggmcAccess) once on startup so the UI
@@ -34,6 +35,20 @@ async function loadAccess(
   } catch {
     setAccess(null);
   }
+}
+
+/**
+ * Read the store's currency settings once on connect via get_store_settings.
+ * Older plugins without the tool (or any error) leave the default (USD/$), so
+ * money still renders — just not localised.
+ */
+async function loadCurrency(
+  siteUrl: string,
+  apiKey: string,
+  setCurrency: (c: Currency) => void,
+): Promise<void> {
+  const currency = await new McpClient(siteUrl, apiKey).getCurrency();
+  if (currency) setCurrency(currency);
 }
 
 /**
@@ -88,7 +103,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
 }
 
 export function App() {
-  const { isOnboarded, licenseValid, setCredentials, setOnboarded, setStatus, setAiStatus, setLicense, setLocationsEnabled, setAccess } = useConnectionStore();
+  const { isOnboarded, licenseValid, setCredentials, setOnboarded, setStatus, setAiStatus, setLicense, setLocationsEnabled, setAccess, setCurrency } = useConnectionStore();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -109,6 +124,9 @@ export function App() {
 
           // Read the key's Access Group so the UI can gate domains per level.
           loadAccess(credentials.siteUrl, credentials.apiKey, setAccess);
+
+          // Read the store currency so money renders in the store's format.
+          loadCurrency(credentials.siteUrl, credentials.apiKey, setCurrency);
         }
 
         // Load and validate license key (for AI features — non-blocking)
@@ -172,7 +190,7 @@ export function App() {
       }
     }
     loadCredentials();
-  }, [setCredentials, setOnboarded, setStatus, setAiStatus, setLicense, setLocationsEnabled, setAccess]);
+  }, [setCredentials, setOnboarded, setStatus, setAiStatus, setLicense, setLocationsEnabled, setAccess, setCurrency]);
 
   if (loading) {
     return (

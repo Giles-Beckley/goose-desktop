@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react';
 import { useMcp } from '../hooks/useMcp';
+import { useConnectionStore } from '../stores/connectionStore';
+import { formatCurrency } from '../../shared/currency';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { MCP_RESOURCES } from '../../shared/mcpTools';
 
 export function Dashboard() {
   const { readResource } = useMcp();
+  const currency = useConnectionStore((s) => s.currency);
   const [totalProducts, setTotalProducts] = useState<string>('--');
   const [totalOrders, setTotalOrders] = useState<string>('--');
-  const [revenue, setRevenue] = useState<string>('--');
-  const [recentOrders, setRecentOrders] = useState<Array<{ id: number; total: string; status: string; customer: string }>>([]);
+  const [revenue, setRevenue] = useState<number | null>(null);
+  const [recentOrders, setRecentOrders] = useState<Array<{ id: number; total: number; status: string; customer: string }>>([]);
   const [loading, setLoading] = useState(false);
 
   const fetchDashboardData = async () => {
@@ -38,12 +41,12 @@ export function Dashboard() {
             setTotalOrders(String(data.count ?? orders.length));
 
             const totalRev = orders.reduce((sum: number, o: { total_amount: number }) => sum + o.total_amount, 0);
-            setRevenue(`$${totalRev.toFixed(2)}`);
+            setRevenue(totalRev);
 
             setRecentOrders(
               orders.slice(0, 5).map((o: { id: number; total_amount: number; status: string; customer_first_name?: string; customer_last_name?: string; customer_email?: string }) => ({
                 id: o.id,
-                total: o.total_amount.toFixed(2),
+                total: o.total_amount,
                 status: o.status,
                 customer: o.customer_first_name
                   ? `${o.customer_first_name} ${o.customer_last_name ?? ''}`.trim()
@@ -81,7 +84,7 @@ export function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <StatCard title="Total Products" value={totalProducts} icon={<ProductIcon />} />
         <StatCard title="Total Orders" value={totalOrders} icon={<OrderIcon />} />
-        <StatCard title="Revenue" value={revenue} icon={<RevenueIcon />} />
+        <StatCard title="Revenue" value={revenue == null ? '--' : formatCurrency(revenue, currency)} icon={<RevenueIcon />} />
       </div>
 
       <div className="bg-white rounded-xl border border-goose-border p-6">
@@ -105,7 +108,7 @@ export function Dashboard() {
                     <td className="py-2.5">
                       <StatusBadge status={order.status} />
                     </td>
-                    <td className="py-2.5 text-sm font-medium text-goose-text">${order.total}</td>
+                    <td className="py-2.5 text-sm font-medium text-goose-text">{formatCurrency(order.total, currency)}</td>
                   </tr>
                 ))}
               </tbody>

@@ -6,7 +6,7 @@ import { LoadingSpinner } from '../components/LoadingSpinner';
 import { TitleBar } from '../components/TitleBar';
 
 export function Register() {
-  const { setCredentials, setOnboarded, setStatus, setAccess } = useConnectionStore();
+  const { setCredentials, setOnboarded, setStatus, setAccess, setCurrency } = useConnectionStore();
   const { testConnection } = useMcp();
 
   const [siteUrl, setSiteUrl] = useState('');
@@ -40,7 +40,10 @@ export function Register() {
 
       // Read the new key's Access Group so the UI gates domains from the start.
       try {
-        setAccess(await new McpClient(siteUrl, mcpApiKey).getAccess());
+        const client = new McpClient(siteUrl, mcpApiKey);
+        setAccess(await client.getAccess());
+        const currency = await client.getCurrency();
+        if (currency) setCurrency(currency);
       } catch {
         setAccess(null);
       }

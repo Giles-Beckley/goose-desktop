@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useMcp } from '../hooks/useMcp';
 import { useConnectionStore } from '../stores/connectionStore';
+import { formatCurrency } from '../../shared/currency';
 import { MCP_TOOLS } from '../../shared/mcpTools';
 import { LoadingSpinner } from './LoadingSpinner';
 import type { Product, Category, Tag, AttributeGroup, ProductAttribute, VariationType, ProductVariation, Outlet, ProductOutletLink } from '../../shared/types';
@@ -1442,6 +1443,7 @@ function VariationRow({
   onDelete: (id: number) => void;
   saving: boolean;
 }) {
+  const currency = useConnectionStore((s) => s.currency);
   const [editing, setEditing] = useState(false);
   const [varPrice, setVarPrice] = useState(variation.price != null ? String(variation.price) : '');
   const [varSalePrice, setVarSalePrice] = useState(variation.sale_price != null ? String(variation.sale_price) : '');
@@ -1457,8 +1459,8 @@ function VariationRow({
           <p className="text-sm font-medium text-goose-text truncate">{attrLabel}</p>
           <p className="text-xs text-goose-text-light">
             {variation.sku && `${variation.sku} · `}
-            {variation.price != null ? `$${variation.price}` : 'No price'}
-            {variation.sale_price != null && ` (sale: $${variation.sale_price})`}
+            {variation.price != null ? formatCurrency(variation.price, currency) : 'No price'}
+            {variation.sale_price != null && ` (sale: ${formatCurrency(variation.sale_price, currency)})`}
             {' · '}Stock: {variation.stock ?? 'N/A'}
           </p>
         </div>

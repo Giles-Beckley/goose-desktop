@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useMcp } from '../hooks/useMcp';
+import { useConnectionStore } from '../stores/connectionStore';
+import { formatCurrency } from '../../shared/currency';
 import { MCP_TOOLS } from '../../shared/mcpTools';
 import { LoadingSpinner } from './LoadingSpinner';
 import type { Order, Product, Shipment, Customer } from '../../shared/types';
@@ -60,6 +62,8 @@ const SHIPMENT_STATUSES = [
 
 export function OrderForm({ order, onClose, onSaved, readOnly = false }: OrderFormProps) {
   const { callTool } = useMcp();
+  const currency = useConnectionStore((s) => s.currency);
+  const money = (amount: number | null | undefined) => formatCurrency(amount, currency);
   const isView = !!order;
 
   // Customer fields (create mode)
@@ -75,6 +79,7 @@ export function OrderForm({ order, onClose, onSaved, readOnly = false }: OrderFo
   const [customerSearch, setCustomerSearch] = useState('');
   const [customerResults, setCustomerResults] = useState<Customer[]>([]);
   const [searchingCustomers, setSearchingCustomers] = useState(false);
+  const [customerSearchMsg, setCustomerSearchMsg] = useState<string | null>(null);
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
 
   // Billing address (create mode)
@@ -165,19 +170,37 @@ export function OrderForm({ order, onClose, onSaved, readOnly = false }: OrderFo
     setCustomerSearch(term);
     if (term.length < 2) {
       setCustomerResults([]);
+      setCustomerSearchMsg(null);
       return;
     }
     setSearchingCustomers(true);
+    setCustomerSearchMsg(null);
     try {
-      const result = await callTool(MCP_TOOLS.LIST_CUSTOMERS, { search: term, limit: 10 });
-      const text = result?.content?.[0]?.text;
-      if (text) {
-        const data = JSON.parse(text);
-        const items = Array.isArray(data) ? data : data.customers ?? [];
-        setCustomerResults(items as Customer[]);
+      // sort_by/sort_order are passed explicitly: the plugin's list_customers
+      // builds an invalid `ORDER BY  DESC` when sort_by is omitted (returns 0
+      // rows). Passing them sidesteps that until the plugin is fixed.
+      const result = await callTool(MCP_TOOLS.LIST_CUSTOMERS, { search: term, limit: 10, sort_by: 'created_at', sort_order: 'desc' });
+      // callTool swallows errors and returns null (logged to the console). Treat
+      // that as a lookup failure rather than silently showing nothing.
+      if (result === null) {
+        setCustomerResults([]);
+        setCustomerSearchMsg('Customer lookup failed — your API key may not have read access to customers. You can still enter details manually.');
+        return;
       }
-    } catch {
+      const text = result?.content?.[0]?.text;
+      const data = text ? JSON.parse(text) : null;
+      // The plugin returns { success, error?, customers: [...] }.
+      if (data && data.success === false) {
+        setCustomerResults([]);
+        setCustomerSearchMsg(data.error || 'Customer lookup failed.');
+        return;
+      }
+      const items = Array.isArray(data) ? data : data?.customers ?? [];
+      setCustomerResults(items as Customer[]);
+      setCustomerSearchMsg(items.length === 0 ? 'No matching customers. Enter details below to create a new one.' : null);
+    } catch (err) {
       setCustomerResults([]);
+      setCustomerSearchMsg(err instanceof Error ? err.message : 'Customer lookup failed.');
     } finally {
       setSearchingCustomers(false);
     }
@@ -193,6 +216,7 @@ export function OrderForm({ order, onClose, onSaved, readOnly = false }: OrderFo
     setTaxId(customer.tax_id ?? '');
     setCustomerSearch('');
     setCustomerResults([]);
+    setCustomerSearchMsg(null);
 
     // Pull saved addresses to prefill billing/shipping.
     try {
@@ -597,30 +621,30 @@ export function OrderForm({ order, onClose, onSaved, readOnly = false }: OrderFo
                 {order.subtotal != null && (
                   <div className="flex justify-between text-sm">
                     <span className="text-goose-text-light">Subtotal</span>
-                    <span className="text-goose-text">${order.subtotal.toFixed(2)}</span>
+                    <span className="text-goose-text">{money(order.subtotal)}</span>
                   </div>
                 )}
                 {(order.tax_amount ?? 0) > 0 && (
                   <div className="flex justify-between text-sm">
                     <span className="text-goose-text-light">Tax</span>
-                    <span className="text-goose-text">${order.tax_amount!.toFixed(2)}</span>
+                    <span className="text-goose-text">{money(order.tax_amount)}</span>
                   </div>
                 )}
                 {(order.shipping_amount ?? 0) > 0 && (
                   <div className="flex justify-between text-sm">
                     <span className="text-goose-text-light">Shipping</span>
-                    <span className="text-goose-text">${order.shipping_amount!.toFixed(2)}</span>
+                    <span className="text-goose-text">{money(order.shipping_amount)}</span>
                   </div>
                 )}
                 {(order.discount_amount ?? 0) > 0 && (
                   <div className="flex justify-between text-sm">
                     <span className="text-goose-text-light">Discount</span>
-                    <span className="text-green-600">-${order.discount_amount!.toFixed(2)}</span>
+                    <span className="text-green-600">-{money(order.discount_amount)}</span>
                   </div>
                 )}
                 <div className="flex justify-between text-sm font-medium pt-1.5 border-t border-goose-border">
                   <span className="text-goose-text">Total</span>
-                  <span className="text-goose-text">${order.total_amount.toFixed(2)}</span>
+                  <span className="text-goose-text">{money(order.total_amount)}</span>
                 </div>
               </div>
 
@@ -643,7 +667,7 @@ export function OrderForm({ order, onClose, onSaved, readOnly = false }: OrderFo
                           )}
                         </div>
                         <span className="text-xs text-goose-text-light">x{item.quantity}</span>
-                        <span className="text-sm font-medium text-goose-text">${item.subtotal.toFixed(2)}</span>
+                        <span className="text-sm font-medium text-goose-text">{money(item.subtotal)}</span>
                       </div>
                     ))}
                   </div>
@@ -787,7 +811,7 @@ export function OrderForm({ order, onClose, onSaved, readOnly = false }: OrderFo
                       {ship.cost != null && (
                         <div className="flex justify-between text-sm">
                           <span className="text-goose-text-light">Cost</span>
-                          <span className="text-goose-text">${ship.cost.toFixed(2)}</span>
+                          <span className="text-goose-text">{money(ship.cost)}</span>
                         </div>
                       )}
                       {ship.notes && (
@@ -923,7 +947,11 @@ export function OrderForm({ order, onClose, onSaved, readOnly = false }: OrderFo
               ))}
             </div>
           )}
-          <p className="mt-1 text-xs text-goose-text-light">Or enter the customer details below to create a new one.</p>
+          {customerSearchMsg ? (
+            <p className="mt-1 text-xs text-amber-700">{customerSearchMsg}</p>
+          ) : (
+            <p className="mt-1 text-xs text-goose-text-light">Or enter the customer details below to create a new one.</p>
+          )}
         </div>
       ) : (
         <div className="flex items-center justify-between bg-primary-50 border border-primary-100 rounded-lg px-4 py-2.5">
@@ -1073,7 +1101,7 @@ export function OrderForm({ order, onClose, onSaved, readOnly = false }: OrderFo
                   className="w-full px-4 py-2.5 text-left text-sm hover:bg-gray-50 flex justify-between items-center"
                 >
                   <span className="text-goose-text">{p.name}</span>
-                  <span className="text-goose-text-light">${p.price}</span>
+                  <span className="text-goose-text-light">{money(parseFloat(p.sale_price || p.price) || 0)}</span>
                 </button>
               ))}
             </div>
@@ -1087,10 +1115,10 @@ export function OrderForm({ order, onClose, onSaved, readOnly = false }: OrderFo
               <div key={li.product_id} className="flex items-center gap-3 px-4 py-2.5">
                 <div className="flex-1 min-w-0">
                   <span className="block text-sm text-goose-text truncate">{li.product_name}</span>
-                  <span className="text-xs text-goose-text-light">Catalogue: ${li.price.toFixed(2)} each</span>
+                  <span className="text-xs text-goose-text-light">Catalogue: {money(li.price)} each</span>
                 </div>
                 <div className="relative">
-                  <span className="absolute left-2 top-1.5 text-xs text-goose-text-light">$</span>
+                  <span className="absolute left-2 top-1.5 text-xs text-goose-text-light">{currency.symbol}</span>
                   <input
                     type="number"
                     step="0.01"
@@ -1109,7 +1137,7 @@ export function OrderForm({ order, onClose, onSaved, readOnly = false }: OrderFo
                   onChange={(e) => updateQuantity(li.product_id, parseInt(e.target.value, 10) || 1)}
                   className="w-16 px-2 py-1 border border-goose-border rounded text-sm text-center"
                 />
-                <span className="w-20 text-right text-sm font-medium text-goose-text">${(effectivePrice(li) * li.quantity).toFixed(2)}</span>
+                <span className="w-20 text-right text-sm font-medium text-goose-text">{money(effectivePrice(li) * li.quantity)}</span>
                 <button
                   type="button"
                   onClick={() => removeLineItem(li.product_id)}
@@ -1124,7 +1152,7 @@ export function OrderForm({ order, onClose, onSaved, readOnly = false }: OrderFo
             <div className="flex justify-between px-4 py-2.5 bg-gray-50 text-sm">
               <span className="text-goose-text-light">Subtotal (before tax &amp; shipping)</span>
               <span className="font-medium text-goose-text">
-                ${lineItems.reduce((sum, li) => sum + effectivePrice(li) * li.quantity, 0).toFixed(2)}
+                {money(lineItems.reduce((sum, li) => sum + effectivePrice(li) * li.quantity, 0))}
               </span>
             </div>
           </div>
@@ -1148,7 +1176,7 @@ export function OrderForm({ order, onClose, onSaved, readOnly = false }: OrderFo
           </Field>
           <Field label="Shipping amount">
             <div className="relative">
-              <span className="absolute left-3 top-2.5 text-sm text-goose-text-light">$</span>
+              <span className="absolute left-3 top-2.5 text-sm text-goose-text-light">{currency.symbol}</span>
               <input
                 type="number"
                 step="0.01"

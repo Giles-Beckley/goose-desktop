@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { useMcp } from '../hooks/useMcp';
 import { useAccess } from '../hooks/useAccess';
 import { useOrdersStore } from '../stores/ordersStore';
+import { useConnectionStore } from '../stores/connectionStore';
+import { formatCurrency } from '../../shared/currency';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { SlideOver } from '../components/SlideOver';
 import { OrderForm } from '../components/OrderForm';
@@ -14,6 +16,7 @@ export function Orders() {
   const { canWrite } = useAccess();
   const writable = canWrite('order');
   const { orders, loading, error, setOrders, setLoading, setError } = useOrdersStore();
+  const currency = useConnectionStore((s) => s.currency);
   const [filter, setFilter] = useState('all');
 
   const [page, setPage] = useState(1);
@@ -140,7 +143,7 @@ export function Orders() {
                       <StatusBadge status={o.status} />
                     </td>
                     <td className="px-6 py-3 text-sm font-medium text-goose-text">
-                      ${o.total_amount.toFixed(2)}
+                      {formatCurrency(o.total_amount, currency)}
                     </td>
                   </tr>
                 ))

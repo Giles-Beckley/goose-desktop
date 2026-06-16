@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { useMcp } from '../hooks/useMcp';
 import { useAccess } from '../hooks/useAccess';
 import { useCustomersStore } from '../stores/customersStore';
+import { useConnectionStore } from '../stores/connectionStore';
+import { formatCurrency } from '../../shared/currency';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { SlideOver } from '../components/SlideOver';
 import { CustomerForm } from '../components/CustomerForm';
@@ -14,6 +16,7 @@ export function Customers() {
   const { canWrite } = useAccess();
   const writable = canWrite('customer');
   const { customers, loading, error, setCustomers, setLoading, setError } = useCustomersStore();
+  const currency = useConnectionStore((s) => s.currency);
   const [search, setSearch] = useState('');
 
   const [page, setPage] = useState(1);
@@ -134,7 +137,7 @@ export function Customers() {
                     </td>
                     <td className="px-6 py-3 text-sm text-goose-text-light">{c.email}</td>
                     <td className="px-6 py-3 text-sm text-goose-text-light">{c.total_orders ?? 0}</td>
-                    <td className="px-6 py-3 text-sm font-medium text-goose-text">${(c.total_spent ?? 0).toFixed(2)}</td>
+                    <td className="px-6 py-3 text-sm font-medium text-goose-text">{formatCurrency(c.total_spent ?? 0, currency)}</td>
                     <td className="px-6 py-3 text-sm text-goose-text-light">
                       {c.created_at ? new Date(c.created_at).toLocaleDateString() : '--'}
                     </td>

@@ -14,6 +14,9 @@
 // ── Tools (executable actions) ──────────────────────────────────────────
 
 export const MCP_TOOLS = {
+  // Store settings (currency, etc.) — general domain, readable by any key.
+  GET_STORE_SETTINGS: 'get_store_settings',
+
   // Product search & filtering
   SEARCH_PRODUCTS: 'search_products',
   FIND_PRODUCT_BY_SKU: 'find_product_by_sku',

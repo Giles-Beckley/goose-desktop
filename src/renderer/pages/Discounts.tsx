@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useMcp } from '../hooks/useMcp';
 import { useAccess } from '../hooks/useAccess';
+import { useConnectionStore } from '../stores/connectionStore';
+import { formatCurrency } from '../../shared/currency';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { SlideOver } from '../components/SlideOver';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -32,6 +34,8 @@ interface Discount {
 export function Discounts() {
   const { callTool, readResource } = useMcp();
   const { canWrite } = useAccess();
+  const currency = useConnectionStore((s) => s.currency);
+  const sym = currency.symbol;
   const writable = canWrite('discount');
   const [discounts, setDiscounts] = useState<Discount[]>([]);
   const [loading, setLoading] = useState(false);
@@ -117,8 +121,8 @@ export function Discounts() {
       if (result?.content?.[0]?.text) {
         const data = JSON.parse(result.content[0].text);
         if (data.valid) {
-          const amount = Number(data.discount_amount ?? 0).toFixed(2);
-          setValidateResult(`Valid! ${data.discount_type === 'percentage' ? 'Percentage' : 'Fixed'} discount — saves $${amount}. ${data.message ?? ''}`);
+          const amount = formatCurrency(Number(data.discount_amount ?? 0), currency);
+          setValidateResult(`Valid! ${data.discount_type === 'percentage' ? 'Percentage' : 'Fixed'} discount — saves ${amount}. ${data.message ?? ''}`);
         } else {
           setValidateResult(`Invalid: ${data.error ?? 'Code not found or expired'}`);
         }
@@ -273,7 +277,7 @@ export function Discounts() {
                         {d.discount_type === 'fixed_amount' ? 'fixed' : d.discount_type}
                       </td>
                       <td className="px-6 py-3 text-sm text-goose-text">
-                        {d.discount_type === 'percentage' ? `${d.amount}%` : `$${Number(d.amount).toFixed(2)}`}
+                        {d.discount_type === 'percentage' ? `${d.amount}%` : formatCurrency(Number(d.amount), currency)}
                       </td>
                       <td className="px-6 py-3 text-sm text-goose-text-light">
                         {d.usage_count ?? 0}{d.usage_limit ? ` / ${d.usage_limit}` : ''}
@@ -336,7 +340,7 @@ export function Discounts() {
               <Field label="Count">
                 <input type="number" min="1" max="100" value={bulkCount} onChange={(e) => setBulkCount(e.target.value)} className="input" />
               </Field>
-              <Field label="Value ($)">
+              <Field label={`Value (${sym})`}>
                 <input type="number" step="0.01" min="0" value={bulkValue} onChange={(e) => setBulkValue(e.target.value)} className="input" placeholder="25.00" />
               </Field>
             </div>
@@ -374,6 +378,7 @@ export function Discounts() {
 
 function VoucherBalanceCheck() {
   const { callTool } = useMcp();
+  const currency = useConnectionStore((s) => s.currency);
   const [code, setCode] = useState('');
   const [result, setResult] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
@@ -387,7 +392,7 @@ function VoucherBalanceCheck() {
       if (res?.content?.[0]?.text) {
         const data = JSON.parse(res.content[0].text);
         if (data.success !== false) {
-          setResult(`Balance: $${data.remaining_balance?.toFixed(2) ?? '0.00'} (Original: $${data.original_value?.toFixed(2) ?? '0.00'})`);
+          setResult(`Balance: ${formatCurrency(data.remaining_balance ?? 0, currency)} (Original: ${formatCurrency(data.original_value ?? 0, currency)})`);
         } else {
           setResult(data.error ?? 'Voucher not found');
         }
@@ -438,6 +443,7 @@ function DiscountForm({
   readOnly?: boolean;
 }) {
   const { callTool } = useMcp();
+  const sym = useConnectionStore((s) => s.currency.symbol);
   const isEdit = !!discount;
 
   const toDateInput = (val: string | null | undefined): string => {
@@ -551,8 +557,8 @@ function DiscountForm({
             className="input disabled:bg-gray-100 disabled:text-goose-text-light"
           >
             <option value="percentage">Percentage (%)</option>
-            <option value="fixed_amount">Fixed Amount ($)</option>
-            <option value="voucher">Voucher ($)</option>
+            <option value="fixed_amount">{`Fixed Amount (${sym})`}</option>
+            <option value="voucher">{`Voucher (${sym})`}</option>
           </select>
         </Field>
       </div>
@@ -579,7 +585,7 @@ function DiscountForm({
       </Field>
 
       <div className="grid grid-cols-2 gap-4">
-        <Field label={discountType === 'percentage' ? 'Discount (%)' : 'Value ($)'}>
+        <Field label={discountType === 'percentage' ? 'Discount (%)' : `Value (${sym})`}>
           <input
             type="number"
             step="0.01"
@@ -610,11 +616,11 @@ function DiscountForm({
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <Field label="Min. order amount ($)">
+        <Field label={`Min. order amount (${sym})`}>
           <input type="number" step="0.01" min="0" value={minimumOrderAmount} onChange={(e) => setMinimumOrderAmount(e.target.value)} className="input" placeholder="No minimum" />
         </Field>
         {discountType === 'percentage' && (
-          <Field label="Max. discount cap ($)">
+          <Field label={`Max. discount cap (${sym})`}>
             <input type="number" step="0.01" min="0" value={maximumDiscountAmount} onChange={(e) => setMaximumDiscountAmount(e.target.value)} className="input" placeholder="No cap" />
           </Field>
         )}

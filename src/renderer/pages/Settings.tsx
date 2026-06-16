@@ -12,7 +12,7 @@ export function Settings() {
     aiLimits, aiUsageToday, aiUsageMonth,
     licenseKey, licenseValid, licensePlanTier, licenseStatus, licenseExpiresAt, licenseEmail,
     setCredentials, clearCredentials, setOnboarded,
-    setAiStatus, setLicense, clearLicense, setAccess,
+    setAiStatus, setLicense, clearLicense, setAccess, setCurrency,
   } = useConnectionStore();
   const { testConnection } = useMcp();
 
@@ -65,9 +65,13 @@ export function Settings() {
     const saved = await window.electronAPI.credentials.save({ siteUrl: url, apiKey: key });
     if (saved) {
       setCredentials(url, key);
-      // The key may have changed — re-read its Access Group so the UI re-gates.
+      // The key may have changed — re-read its Access Group so the UI re-gates,
+      // and refresh the store currency in case the site changed.
       try {
-        setAccess(await new McpClient(url, key).getAccess());
+        const client = new McpClient(url, key);
+        setAccess(await client.getAccess());
+        const currency = await client.getCurrency();
+        if (currency) setCurrency(currency);
       } catch {
         setAccess(null);
       }

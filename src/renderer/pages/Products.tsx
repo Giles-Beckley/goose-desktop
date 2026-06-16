@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { useMcp } from '../hooks/useMcp';
 import { useAccess } from '../hooks/useAccess';
 import { useProductsStore } from '../stores/productsStore';
+import { useConnectionStore } from '../stores/connectionStore';
+import { formatCurrency } from '../../shared/currency';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { SlideOver } from '../components/SlideOver';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -15,6 +17,7 @@ export function Products() {
   const { canWrite } = useAccess();
   const writable = canWrite('product');
   const { products, loading, error, setProducts, setLoading, setError } = useProductsStore();
+  const currency = useConnectionStore((s) => s.currency);
   const [search, setSearch] = useState('');
 
   const [page, setPage] = useState(1);
@@ -149,7 +152,7 @@ export function Products() {
                   <tr key={p.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => openEdit(p)}>
                     <td className="px-6 py-3 text-sm font-medium text-goose-text">{p.name}</td>
                     <td className="px-6 py-3 text-sm text-goose-text-light">{p.sku || '--'}</td>
-                    <td className="px-6 py-3 text-sm text-goose-text">${p.price}</td>
+                    <td className="px-6 py-3 text-sm text-goose-text">{formatCurrency(parseFloat(p.price) || 0, currency)}</td>
                     <td className="px-6 py-3 text-sm text-goose-text-light">{p.stock_quantity ?? p.stock ?? 'N/A'}</td>
                     <td className="px-6 py-3">
                       <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${

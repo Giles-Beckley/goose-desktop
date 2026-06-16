@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import type { ConnectionStatus, AIStatusResponse, LicensePlanTier, LicenseValidationStatus, GgmcAccess } from '../../shared/types';
+import type { Currency } from '../../shared/currency';
+import { DEFAULT_CURRENCY } from '../../shared/currency';
 
 interface ConnectionState {
   siteUrl: string;
@@ -33,6 +35,11 @@ interface ConnectionState {
   // Read from initialize's ggmcAccess block; re-read whenever the key changes.
   access: GgmcAccess | null;
   setAccess: (access: GgmcAccess | null) => void;
+
+  // Store currency (from the plugin's get_store_settings tool). Defaults to USD
+  // until fetched; stays at default on older plugins that lack the tool.
+  currency: Currency;
+  setCurrency: (currency: Currency) => void;
 
   setSiteUrl: (url: string) => void;
   setApiKey: (key: string) => void;
@@ -79,6 +86,9 @@ export const useConnectionStore = create<ConnectionState>((set) => ({
 
   access: null,
   setAccess: (access) => set({ access }),
+
+  currency: DEFAULT_CURRENCY,
+  setCurrency: (currency) => set({ currency }),
 
   setSiteUrl: (url) => set({ siteUrl: url }),
   setApiKey: (key) => set({ apiKey: key }),
@@ -128,6 +138,7 @@ export const useConnectionStore = create<ConnectionState>((set) => ({
       status: 'disconnected',
       isOnboarded: false,
       access: null,
+      currency: DEFAULT_CURRENCY,
       locationsEnabled: null,
       aiConnected: false,
       aiTier: 'free',
