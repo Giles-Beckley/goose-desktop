@@ -42,11 +42,17 @@ what makes existing installs auto-update.
 4. **Watch the build:** <https://github.com/Giles-Beckley/goose-desktop/actions>
    Wait for the **Release** workflow run for that tag to finish green.
 
-5. **Open the draft release:**
-   <https://github.com/Giles-Beckley/goose-desktop/releases>
+5. **Open the draft release:** use the **Releases** tab
+   (<https://github.com/Giles-Beckley/goose-desktop/releases>), NOT the Tags tab.
    The new `vX.Y.Z` shows as **Draft** (drafts are visible only when logged in).
-   Confirm it has **all three assets**: `Goose-Commerce-Setup.exe`,
+   Confirm it has **all three build assets**: `Goose-Commerce-Setup.exe`,
    `…​.exe.blockmap`, and `latest.yml`. If any are missing, see Troubleshooting.
+
+   > **Tags tab ≠ Releases tab.** The **Tags** page only shows GitHub's
+   > auto-generated `Source code (zip)` / `(tar.gz)` snapshots — it will look
+   > like the release has "only 2 files" even when the build succeeded. The
+   > installer + `latest.yml` live on the **Releases** tab's draft. Always
+   > verify assets there, not on Tags.
 
 6. **Publish the draft.** Edit the draft → set "Set as the latest release" → click
    **Publish release**. Existing installs will now detect the update.
@@ -67,6 +73,13 @@ what makes existing installs auto-update.
   already pushed.
 
 ## Troubleshooting
+
+### "The release is missing files / only shows 2 source archives"
+You're almost certainly looking at the **Tags** tab. It only lists GitHub's
+auto-generated `Source code (zip)` / `(tar.gz)`. Switch to the **Releases** tab
+and open the `vX.Y.Z` **Draft** — the `Goose-Commerce-Setup.exe`, `.blockmap`,
+and `latest.yml` are attached there. If they're genuinely absent on the Releases
+draft too, see the empty-release fix below.
 
 ### In-app update check fails: "Cannot find latest.yml … 404"
 The latest published release has no `latest.yml`. Usual cause: a **published but
