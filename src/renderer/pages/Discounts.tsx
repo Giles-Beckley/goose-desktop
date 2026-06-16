@@ -7,8 +7,36 @@ import { LoadingSpinner } from '../components/LoadingSpinner';
 import { SlideOver } from '../components/SlideOver';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { MCP_TOOLS, MCP_RESOURCES } from '../../shared/mcpTools';
+import { VolumeDiscounts } from '../components/VolumeDiscounts';
 
 type DiscountType = 'percentage' | 'fixed_amount' | 'voucher';
+
+type DiscountTab = 'coupons' | 'volume';
+
+export function Discounts() {
+  const [tab, setTab] = useState<DiscountTab>('coupons');
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-6">
+        <h1 className="text-2xl font-display font-bold text-goose-text mr-4">Discounts</h1>
+        {(['coupons', 'volume'] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`px-3 py-1.5 text-sm font-medium rounded-full transition-colors ${
+              tab === t ? 'bg-primary-100 text-primary-700' : 'bg-gray-100 text-goose-text-light hover:bg-gray-200'
+            }`}
+          >
+            {t === 'coupons' ? 'Discounts & Vouchers' : 'Volume Discounts'}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'coupons' ? <CouponDiscounts /> : <VolumeDiscounts />}
+    </div>
+  );
+}
 
 interface Discount {
   id: number;
@@ -31,7 +59,7 @@ interface Discount {
   created_at?: string;
 }
 
-export function Discounts() {
+function CouponDiscounts() {
   const { callTool, readResource } = useMcp();
   const { canWrite } = useAccess();
   const currency = useConnectionStore((s) => s.currency);
@@ -166,8 +194,7 @@ export function Discounts() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-display font-bold text-goose-text">Discounts & Vouchers</h1>
+      <div className="flex items-center justify-end mb-6">
         {writable && (
           <div className="flex gap-2">
             <button

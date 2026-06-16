@@ -17,6 +17,12 @@ export const MCP_TOOLS = {
   // Store settings (currency, etc.) — general domain, readable by any key.
   GET_STORE_SETTINGS: 'get_store_settings',
 
+  // Dispatcher tools — reach any operation by name (get_quantity_discounts /
+  // update_quantity_discounts etc.) via the plugin's progressive-disclosure
+  // dispatcher. See .claude/PLUGIN_DISPATCHER_BRIEF.md.
+  STORE_QUERY: 'store_query',
+  STORE_ACTION: 'store_action',
+
   // Product search & filtering
   SEARCH_PRODUCTS: 'search_products',
   FIND_PRODUCT_BY_SKU: 'find_product_by_sku',
