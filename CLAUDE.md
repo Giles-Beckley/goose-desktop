@@ -4,11 +4,23 @@ Electron + React (Vite) desktop app for the Goose Commerce WordPress plugin.
 Renderer code is in `src/renderer`; shared types/constants in `src/shared`; the
 plugin it talks to lives in a **separate repo** (do not edit it from here).
 
-## Releasing — follow `RELEASING.md`
+## Releasing — STANDING ORDER (do not re-plan this each time)
 
-Full runbook: [RELEASING.md](RELEASING.md). The standard flow is **bump version →
-commit → push master → tag `vX.Y.Z` → CI builds a draft → user publishes the draft
-as latest**. Key rules so the auto-updater keeps working:
+This process is settled. When the user says "release it" / "cut a release" / "get
+it ready to release" (or similar), execute the standard flow below **directly** —
+do not re-investigate, re-design, or ask whether to proceed. The only decision that
+ever needs confirming is the **version number** if it hasn't already been bumped.
+
+**Default action on a release request:**
+1. Ensure `package.json` `version` is bumped (higher than the last released tag) and
+   committed + pushed to `master`. If not bumped, bump it (patch for fixes, minor for
+   features), commit, push.
+2. `git tag vX.Y.Z && git push origin vX.Y.Z` (tag must match `package.json`).
+3. Watch the **Release** Actions run to green, then tell the user the draft is ready.
+4. **Stop there.** Publishing the draft as "latest" is the user's manual click — never
+   publish on their behalf unless they explicitly say "publish it".
+
+Full runbook: [RELEASING.md](RELEASING.md). Key rules so the auto-updater keeps working:
 
 - **A version-tag push (`v*.*.*`) is the only thing that triggers a build.**
   Pushing `master` alone builds nothing. See `.github/workflows/release.yml`.
