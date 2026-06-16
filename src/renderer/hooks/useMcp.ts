@@ -55,7 +55,8 @@ export function useMcp() {
 
   const callTool = useCallback(async (
     toolName: string,
-    args: Record<string, unknown> = {}
+    args: Record<string, unknown> = {},
+    opts?: { quiet?: boolean }
   ): Promise<McpToolResult | null> => {
     const client = getClient();
     if (!client) return null;
@@ -69,7 +70,11 @@ export function useMcp() {
       // because the key's group changed, refresh ggmcAccess so the UI re-gates.
       if (isAccessDenied(error)) {
         client.whoami().then((a) => { if (a) setAccess(a); }).catch(() => {});
-      } else {
+      } else if (!opts?.quiet) {
+        // A failing *feature* call (e.g. an optional/license-gated operation the
+        // plugin rejects) is not a *connection* failure — callers can pass
+        // { quiet: true } to surface the error locally without flipping the
+        // whole app to "Connection Error".
         setStatus('error');
       }
       return null;
@@ -77,7 +82,8 @@ export function useMcp() {
   }, [getClient, setStatus, setAccess, ensureInitialized]);
 
   const readResource = useCallback(async (
-    uri: string
+    uri: string,
+    opts?: { quiet?: boolean }
   ): Promise<McpToolResult | null> => {
     const client = getClient();
     if (!client) return null;
@@ -87,7 +93,10 @@ export function useMcp() {
       return await client.readResource(uri);
     } catch (error) {
       console.error(`Failed to read resource ${uri}:`, error);
-      setStatus('error');
+      // A single failing resource (e.g. a server-side 500 on one endpoint) is
+      // not a connection failure — callers can pass { quiet: true } to handle
+      // it locally instead of marking the whole app disconnected.
+      if (!opts?.quiet) setStatus('error');
       return null;
     }
   }, [getClient, setStatus, ensureInitialized]);

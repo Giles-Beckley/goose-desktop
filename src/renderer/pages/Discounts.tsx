@@ -92,8 +92,13 @@ function CouponDiscounts() {
     setLoading(true);
     setError(null);
     try {
-      const result = await readResource(MCP_RESOURCES.DISCOUNTS);
-      if (result?.content?.[0]?.text) {
+      // quiet: a failure here (e.g. a server-side 500 on the discounts
+      // endpoint) must not flip the whole app to "Connection Error".
+      const result = await readResource(MCP_RESOURCES.DISCOUNTS, { quiet: true });
+      if (result === null) {
+        setError('Could not load discounts (the store returned an error). Other sections are unaffected.');
+        setDiscounts([]);
+      } else if (result?.content?.[0]?.text) {
         const data = JSON.parse(result.content[0].text);
         if (data.error) {
           setError(data.error);

@@ -181,9 +181,19 @@ export function VolumeDiscounts() {
     setError(null);
     setFeatureOff(false);
     try {
-      const data = parse(
-        await callTool(MCP_TOOLS.STORE_QUERY, { operation: 'get_quantity_discounts', params: {} }),
+      const result = await callTool(
+        MCP_TOOLS.STORE_QUERY,
+        { operation: 'get_quantity_discounts', params: {} },
+        { quiet: true },
       );
+      if (result === null) {
+        // The call threw (transport error, or the plugin rejected the
+        // operation). Surface it here without breaking the rest of the app.
+        setError('Could not reach the volume-discounts service. Check the store connection or that the plugin supports this feature.');
+        setGroups([]);
+        return;
+      }
+      const data = parse(result);
       if (data?.success === false) {
         if (String(data.error ?? '').includes('not activated')) {
           setFeatureOff(true);
@@ -212,15 +222,22 @@ export function VolumeDiscounts() {
     setSaving(true);
     setError(null);
     try {
-      const data = parse(
-        await callTool(MCP_TOOLS.STORE_ACTION, {
+      const result = await callTool(
+        MCP_TOOLS.STORE_ACTION,
+        {
           operation: 'update_quantity_discounts',
           params: {
             show_product_badges: nextBadges,
             groups: nextGroups.map(toWireGroup),
           },
-        }),
+        },
+        { quiet: true },
       );
+      if (result === null) {
+        setError('Could not reach the volume-discounts service. Your changes were not saved.');
+        return false;
+      }
+      const data = parse(result);
       if (data?.success === false) {
         setError(data.error ?? 'Failed to save volume discounts');
         return false;
