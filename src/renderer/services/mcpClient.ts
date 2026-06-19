@@ -28,9 +28,20 @@ export class McpClient {
   private apiKey: string;
   public status: ConnectionStatus = 'disconnected';
 
+  // Per-instance init state. A new client (i.e. a different site) starts
+  // uninitialized, so switching sites always re-initializes against the new
+  // connection — never reusing a previous site's handshake.
+  private initialized = false;
+  private initPromise: Promise<void> | null = null;
+
   constructor(siteUrl: string, apiKey: string) {
     this.siteUrl = siteUrl.replace(/\/+$/, '');
     this.apiKey = apiKey;
+  }
+
+  /** The normalized (trailing-slash-stripped) site URL this client targets. */
+  get url(): string {
+    return this.siteUrl;
   }
 
   private async sendRequest(request: McpRequest): Promise<McpResponse> {
@@ -47,6 +58,26 @@ export class McpClient {
       },
     });
     return this.sendRequest(request);
+  }
+
+  /**
+   * Initialize this client at most once. Concurrent callers share one in-flight
+   * initialize; a failure clears the latch so the next call retries.
+   */
+  async ensureInitialized(): Promise<void> {
+    if (this.initialized) return;
+    if (!this.initPromise) {
+      this.initPromise = (async () => {
+        try {
+          await this.initialize();
+          this.initialized = true;
+        } catch (error) {
+          console.error('Failed to initialize MCP:', error);
+          this.initPromise = null;
+        }
+      })();
+    }
+    await this.initPromise;
   }
 
   /**
@@ -171,5 +202,7 @@ export class McpClient {
     this.siteUrl = siteUrl.replace(/\/+$/, '');
     this.apiKey = apiKey;
     this.status = 'disconnected';
+    this.initialized = false;
+    this.initPromise = null;
   }
 }

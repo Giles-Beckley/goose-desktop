@@ -38,7 +38,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
 }
 
 export function App() {
-  const { isOnboarded, licenseValid, setOnboarded, setSites, setActiveSite, setAiStatus, setLicense } = useConnectionStore();
+  const { isOnboarded, licenseValid, activeSiteId, setOnboarded, setSites, setActiveSite, setAiStatus, setLicense } = useConnectionStore();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -134,11 +134,15 @@ export function App() {
 
   return (
     <ErrorBoundary>
-      <HashRouter>
+      {/* Key the router subtree by the active site so every page remounts (and
+          re-runs its mount-time data fetch) when the user switches sites —
+          otherwise a page already mounted would keep showing the old site's
+          data against the new connection. */}
+      <HashRouter key={activeSiteId ?? 'none'}>
         <Routes>
           <Route element={<Layout />}>
             <Route path="/" element={<Dashboard />} />
-            <Route path="/starting" element={<Starting />} />
+            <Route path="/sites" element={<Starting />} />
             <Route path="/assistant" element={<Assistant />} />
             <Route path="/products" element={<Products />} />
             <Route path="/orders" element={<Orders />} />

@@ -4,8 +4,7 @@ import { useConnectionStore } from '../stores/connectionStore';
 import { isAccessDenied } from '../../shared/access';
 import type { McpToolResult } from '../../shared/types';
 
-let initialized = false;
-let initPromise: Promise<void> | null = null;
+const normalizeUrl = (u: string) => u.replace(/\/+$/, '');
 
 export function useMcp() {
   const { siteUrl, apiKey, setStatus, setAccess } = useConnectionStore();
@@ -14,10 +13,16 @@ export function useMcp() {
   const getClient = useCallback((): McpClient | null => {
     if (!siteUrl || !apiKey) return null;
 
-    if (!clientRef.current || clientRef.current['siteUrl'] !== siteUrl) {
+    // Rebuild the client whenever the active site's URL or key changes. The
+    // comparison uses the normalized URL (the client stores it stripped of
+    // trailing slashes), and init state lives on the client itself, so a new
+    // site always gets a fresh, separately-initialized connection.
+    if (
+      !clientRef.current ||
+      clientRef.current.url !== normalizeUrl(siteUrl) ||
+      clientRef.current['apiKey'] !== apiKey
+    ) {
       clientRef.current = new McpClient(siteUrl, apiKey);
-      initialized = false;
-      initPromise = null;
     }
     return clientRef.current;
   }, [siteUrl, apiKey]);
@@ -25,22 +30,7 @@ export function useMcp() {
   const ensureInitialized = useCallback(async (): Promise<void> => {
     const client = getClient();
     if (!client) return;
-
-    if (initialized) return;
-
-    if (!initPromise) {
-      initPromise = (async () => {
-        try {
-          await client.initialize();
-          initialized = true;
-        } catch (error) {
-          console.error('Failed to initialize MCP:', error);
-          initPromise = null;
-        }
-      })();
-    }
-
-    await initPromise;
+    await client.ensureInitialized();
   }, [getClient]);
 
   const testConnection = useCallback(async (url?: string, key?: string): Promise<boolean> => {

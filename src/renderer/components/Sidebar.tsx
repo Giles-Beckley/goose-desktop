@@ -1,7 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { useConnectionStore } from '../stores/connectionStore';
 import { useAccess } from '../hooks/useAccess';
-import { SiteSwitcher } from './SiteSwitcher';
 import type { AccessDomain } from '../../shared/types';
 
 interface NavItem {
@@ -18,7 +17,7 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { to: '/starting', label: 'Starting', icon: StartingIcon, requiresMultisite: true },
+  { to: '/sites', label: 'Sites', icon: StartingIcon, requiresMultisite: true },
   { to: '/', label: 'Dashboard', icon: DashboardIcon },
   { to: '/assistant', label: 'Assistant', icon: AssistantIcon, requiresLicense: true },
   { to: '/products', label: 'Products', icon: ProductsIcon, domain: 'product' },
@@ -51,12 +50,6 @@ export function Sidebar() {
         <h1 className="text-lg font-display font-bold tracking-tight" style={{ color: '#FFCC00' }}>Goose Commerce</h1>
         <p className="text-xs text-white/50 mt-0.5">Desktop Manager</p>
       </div>
-
-      {isMultisite && (
-        <div className="px-3 pt-3">
-          <SiteSwitcher />
-        </div>
-      )}
 
       <nav className="flex-1 py-4">
         <ul className="space-y-0.5 px-3">
