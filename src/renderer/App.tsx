@@ -15,75 +15,7 @@ import { Register } from './pages/Register';
 import { FloatingChatButton } from './components/FloatingChatButton';
 import { LoadingSpinner } from './components/LoadingSpinner';
 import { useConnectionStore } from './stores/connectionStore';
-import { McpClient } from './services/mcpClient';
-import { MCP_TOOLS } from '../shared/mcpTools';
-import type { GgmcAccess } from '../shared/types';
-import type { Currency, AddressSettings } from '../shared/currency';
-
-/**
- * Read the active key's Access Group (ggmcAccess) once on startup so the UI
- * can gate domains. Errors / older plugins resolve to null (unrestricted).
- */
-async function loadAccess(
-  siteUrl: string,
-  apiKey: string,
-  setAccess: (a: GgmcAccess | null) => void,
-): Promise<void> {
-  try {
-    const client = new McpClient(siteUrl, apiKey);
-    setAccess(await client.getAccess());
-  } catch {
-    setAccess(null);
-  }
-}
-
-/**
- * Read the store's settings (currency + address capabilities) once on connect
- * via get_store_settings. Older plugins without the tool (or any error) leave
- * the defaults (USD/$, single-address), so the UI still works — just not
- * localised / adaptive.
- */
-async function loadStoreSettings(
-  siteUrl: string,
-  apiKey: string,
-  setCurrency: (c: Currency) => void,
-  setAddressSettings: (a: AddressSettings) => void,
-): Promise<void> {
-  const settings = await new McpClient(siteUrl, apiKey).getStoreSettings();
-  if (settings.currency) setCurrency(settings.currency);
-  if (settings.addresses) setAddressSettings(settings.addresses);
-}
-
-/**
- * Probe the 'locations' premium component once per session.
- * Calls list_outlets — if the plugin returns license_inactive, the feature is gated.
- * Anything else (success or any other error) is treated as enabled to avoid false negatives.
- */
-async function probeLocationsLicense(
-  siteUrl: string,
-  apiKey: string,
-  setEnabled: (v: boolean | null) => void,
-): Promise<void> {
-  try {
-    const client = new McpClient(siteUrl, apiKey);
-    await client.initialize();
-    const result = await client.callTool(MCP_TOOLS.LIST_OUTLETS, { limit: 1 });
-    const text = result?.content?.[0]?.text;
-    if (text) {
-      try {
-        const data = JSON.parse(text);
-        if (data?.error === 'license_inactive') {
-          setEnabled(false);
-          return;
-        }
-      } catch { /* fall through to enabled */ }
-    }
-    setEnabled(true);
-  } catch {
-    // Network/connection issue — treat as enabled so the UI doesn't disappear unexpectedly
-    setEnabled(true);
-  }
-}
+import { Starting } from './pages/Starting';
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null as Error | null };
@@ -106,30 +38,23 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
 }
 
 export function App() {
-  const { isOnboarded, licenseValid, setCredentials, setOnboarded, setStatus, setAiStatus, setLicense, setLocationsEnabled, setAccess, setCurrency, setAddressSettings } = useConnectionStore();
+  const { isOnboarded, licenseValid, setOnboarded, setSites, setActiveSite, setAiStatus, setLicense } = useConnectionStore();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadCredentials() {
       try {
-        // Load site credentials (MCP) — this determines onboarding
-        const credentials = await window.electronAPI.credentials.load();
-        if (credentials?.siteUrl && credentials?.apiKey) {
-          setCredentials(credentials.siteUrl, credentials.apiKey);
-          setStatus('connected');
+        // Load the multisite state (auto-migrates a legacy single-site install
+        // on first run). The active site determines onboarding; setActiveSite
+        // re-points the connection and runs the connect-time probes (access,
+        // store settings, locations) itself under its staleness guard.
+        const { sites, activeSiteId } = await window.electronAPI.sites.load();
+        setSites(sites);
+        const activeSite =
+          sites.find((s) => s.id === activeSiteId) ?? sites[0] ?? null;
+        if (activeSite) {
+          setActiveSite(activeSite.id);
           setOnboarded(true);
-
-          // Probe the 'locations' premium component once per session.
-          // We call list_outlets via the MCP proxy directly so the result tells
-          // us whether the feature is licensed without surfacing an error to
-          // the user. license_inactive => disabled; anything else => enabled.
-          probeLocationsLicense(credentials.siteUrl, credentials.apiKey, setLocationsEnabled);
-
-          // Read the key's Access Group so the UI can gate domains per level.
-          loadAccess(credentials.siteUrl, credentials.apiKey, setAccess);
-
-          // Read store settings (currency + address capabilities) on connect.
-          loadStoreSettings(credentials.siteUrl, credentials.apiKey, setCurrency, setAddressSettings);
         }
 
         // Load and validate license key (for AI features — non-blocking)
@@ -150,13 +75,13 @@ export function App() {
                 email: licenseResult.customer_email,
               });
 
-              // Ensure MCP server is linked to the license
-              if (credentials?.siteUrl && credentials?.apiKey) {
+              // Ensure MCP server is linked to the license, using the active site.
+              if (activeSite?.siteUrl && activeSite?.apiKey) {
                 try {
                   await window.electronAPI.ai.updateMcp({
                     licenseKey: savedLicenseKey,
-                    siteUrl: credentials.siteUrl,
-                    mcpApiKey: credentials.apiKey,
+                    siteUrl: activeSite.siteUrl,
+                    mcpApiKey: activeSite.apiKey,
                   });
                 } catch {
                   // Non-critical
@@ -193,7 +118,7 @@ export function App() {
       }
     }
     loadCredentials();
-  }, [setCredentials, setOnboarded, setStatus, setAiStatus, setLicense, setLocationsEnabled, setAccess, setCurrency, setAddressSettings]);
+  }, [setOnboarded, setSites, setActiveSite, setAiStatus, setLicense]);
 
   if (loading) {
     return (
@@ -213,6 +138,7 @@ export function App() {
         <Routes>
           <Route element={<Layout />}>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/starting" element={<Starting />} />
             <Route path="/assistant" element={<Assistant />} />
             <Route path="/products" element={<Products />} />
             <Route path="/orders" element={<Orders />} />

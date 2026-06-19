@@ -4,6 +4,7 @@ import * as path from 'path';
 
 const CREDENTIALS_FILE = 'credentials.enc';
 const LICENSE_KEY_FILE = 'license-key.enc';
+const SITES_FILE = 'sites.enc';
 
 function getCredentialsPath(): string {
   return path.join(app.getPath('userData'), CREDENTIALS_FILE);
@@ -11,6 +12,71 @@ function getCredentialsPath(): string {
 
 function getLicenseKeyPath(): string {
   return path.join(app.getPath('userData'), LICENSE_KEY_FILE);
+}
+
+function getSitesPath(): string {
+  return path.join(app.getPath('userData'), SITES_FILE);
+}
+
+interface SiteConnectionRecord {
+  id: string;
+  label: string;
+  siteUrl: string;
+  apiKey: string;
+}
+
+interface SitesStateRecord {
+  sites: SiteConnectionRecord[];
+  activeSiteId: string | null;
+}
+
+const EMPTY_SITES: SitesStateRecord = { sites: [], activeSiteId: null };
+
+function readSitesFile(): SitesStateRecord | null {
+  const sitesPath = getSitesPath();
+  if (!fs.existsSync(sitesPath)) return null;
+  if (!safeStorage.isEncryptionAvailable()) {
+    throw new Error('Encryption is not available on this system');
+  }
+  const decrypted = safeStorage.decryptString(fs.readFileSync(sitesPath));
+  const parsed = JSON.parse(decrypted) as SitesStateRecord;
+  if (!parsed || !Array.isArray(parsed.sites)) return EMPTY_SITES;
+  return parsed;
+}
+
+function writeSitesFile(state: SitesStateRecord): void {
+  if (!safeStorage.isEncryptionAvailable()) {
+    throw new Error('Encryption is not available on this system');
+  }
+  const encrypted = safeStorage.encryptString(JSON.stringify(state));
+  fs.writeFileSync(getSitesPath(), encrypted);
+}
+
+/**
+ * One-time migration: if there's no sites.enc yet but the old single-site
+ * credentials.enc exists, seed the sites list with that one site and make it
+ * active. Keeps pre-multisite installs working untouched on first launch.
+ * Returns the migrated state, or EMPTY_SITES if there was nothing to migrate.
+ */
+function migrateLegacyCredentials(): SitesStateRecord {
+  const credPath = getCredentialsPath();
+  if (!fs.existsSync(credPath)) return EMPTY_SITES;
+  try {
+    if (!safeStorage.isEncryptionAvailable()) return EMPTY_SITES;
+    const decrypted = safeStorage.decryptString(fs.readFileSync(credPath));
+    const cred = JSON.parse(decrypted) as { siteUrl?: string; apiKey?: string };
+    if (!cred?.siteUrl || !cred?.apiKey) return EMPTY_SITES;
+    const id = 'site-legacy';
+    const state: SitesStateRecord = {
+      sites: [{ id, label: cred.siteUrl, siteUrl: cred.siteUrl, apiKey: cred.apiKey }],
+      activeSiteId: id,
+    };
+    writeSitesFile(state);
+    return state;
+  } catch (error) {
+    console.error('Failed to migrate legacy credentials:', error);
+    return EMPTY_SITES;
+  }
 }
 
 export function registerIpcHandlers(): void {
@@ -62,6 +128,46 @@ export function registerIpcHandlers(): void {
       return true;
     } catch (error) {
       console.error('Failed to clear credentials:', error);
+      return false;
+    }
+  });
+
+  // Load the multisite state. Migrates the legacy single-site credentials on
+  // first run if sites.enc doesn't exist yet. Always returns a valid object.
+  ipcMain.handle('sites:load', async (): Promise<SitesStateRecord> => {
+    try {
+      const existing = readSitesFile();
+      if (existing) return existing;
+      return migrateLegacyCredentials();
+    } catch (error) {
+      console.error('Failed to load sites:', error);
+      return EMPTY_SITES;
+    }
+  });
+
+  // Save the full multisite state (sites + active id).
+  ipcMain.handle('sites:save', async (_event, state: SitesStateRecord) => {
+    try {
+      writeSitesFile({
+        sites: Array.isArray(state?.sites) ? state.sites : [],
+        activeSiteId: state?.activeSiteId ?? null,
+      });
+      return true;
+    } catch (error) {
+      console.error('Failed to save sites:', error);
+      return false;
+    }
+  });
+
+  // Update just the active site id, leaving the site list intact.
+  ipcMain.handle('sites:set-active', async (_event, id: string) => {
+    try {
+      const state = readSitesFile() ?? migrateLegacyCredentials();
+      if (!state.sites.some((s) => s.id === id)) return false;
+      writeSitesFile({ ...state, activeSiteId: id });
+      return true;
+    } catch (error) {
+      console.error('Failed to set active site:', error);
       return false;
     }
   });

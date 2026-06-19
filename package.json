@@ -1,6 +1,6 @@
 {
   "name": "goose-commerce-desktop",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "description": "Desktop application for Goose Commerce WordPress e-commerce plugin",
   "main": "dist/main/main.js",
   "author": "WP Goose",

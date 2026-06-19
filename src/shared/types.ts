@@ -1,3 +1,5 @@
+import type { Currency } from './currency';
+
 // Connection credentials
 export interface ConnectionCredentials {
   siteUrl: string;
@@ -6,6 +8,55 @@ export interface ConnectionCredentials {
 
 // Connection status
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
+
+// === MULTISITE ===
+
+/**
+ * One connected store. The app can hold several of these; exactly one is the
+ * "active" site that the rest of the UI (Products, Orders, Settings…) operates
+ * on. `id` is a stable, locally-generated identifier (not the site URL, so a
+ * site can be re-pointed without losing its identity / overview position).
+ */
+export interface SiteConnection {
+  id: string;
+  label: string;
+  siteUrl: string;
+  apiKey: string;
+}
+
+/** Persisted multisite state: the list of sites plus which one is active. */
+export interface SitesState {
+  sites: SiteConnection[];
+  activeSiteId: string | null;
+}
+
+/** Per-site health, derived from an MCP probe on the Starting overview page. */
+export type SiteHealth = 'online' | 'offline' | 'error';
+
+/**
+ * A point-in-time snapshot of one site for the Starting overview. Built on the
+ * page from per-site MCP calls; never persisted. `metrics`/`pending` are absent
+ * when the site is unreachable.
+ */
+export interface SiteOverview {
+  id: string;
+  health: SiteHealth;
+  /** ISO timestamp of when this snapshot was taken. */
+  lastChecked: string;
+  /** Short reason when health is 'error' (e.g. an HTTP message). */
+  error?: string;
+  /** The site's own store currency (for formatting its revenue). Absent when
+   *  unreachable or on an older plugin — callers fall back to the default. */
+  currency?: Currency;
+  metrics?: {
+    productCount: number | null;
+    recentOrders: number | null;
+    revenue: number | null;
+  };
+  pending?: {
+    pendingOrders: number | null;
+  };
+}
 
 // MCP request/response types
 export interface McpRequest {
@@ -193,6 +244,11 @@ export interface ElectronAPI {
     save: (credentials: ConnectionCredentials) => Promise<boolean>;
     load: () => Promise<ConnectionCredentials | null>;
     clear: () => Promise<boolean>;
+  };
+  sites: {
+    load: () => Promise<SitesState>;
+    save: (state: SitesState) => Promise<boolean>;
+    setActive: (id: string) => Promise<boolean>;
   };
   mcp: {
     request: (siteUrl: string, apiKey: string, body: McpRequest) => Promise<McpResponse>;

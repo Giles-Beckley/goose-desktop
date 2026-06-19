@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import { useConnectionStore } from '../stores/connectionStore';
 import { useAccess } from '../hooks/useAccess';
+import { SiteSwitcher } from './SiteSwitcher';
 import type { AccessDomain } from '../../shared/types';
 
 interface NavItem {
@@ -9,12 +10,15 @@ interface NavItem {
   icon: () => JSX.Element;
   requiresLicense?: boolean;
   requiresLocations?: boolean;
+  /** Only shown when more than one site is connected (multisite). */
+  requiresMultisite?: boolean;
   /** Access Group domain this nav item maps to. Items with no domain are
    *  'general' (always shown). Hidden when the key's level for it is 'none'. */
   domain?: AccessDomain;
 }
 
 const navItems: NavItem[] = [
+  { to: '/starting', label: 'Starting', icon: StartingIcon, requiresMultisite: true },
   { to: '/', label: 'Dashboard', icon: DashboardIcon },
   { to: '/assistant', label: 'Assistant', icon: AssistantIcon, requiresLicense: true },
   { to: '/products', label: 'Products', icon: ProductsIcon, domain: 'product' },
@@ -27,9 +31,12 @@ const navItems: NavItem[] = [
 ];
 
 export function Sidebar() {
-  const { licenseValid, locationsEnabled } = useConnectionStore();
+  const { licenseValid, locationsEnabled, sites } = useConnectionStore();
   const { canRead } = useAccess();
+  const isMultisite = sites.length > 1;
   const visibleItems = navItems.filter((item) => {
+    // The 'Starting' overview only appears once a second site is connected.
+    if (item.requiresMultisite && !isMultisite) return false;
     // Hide items behind a premium feature gate only once detected off.
     if (item.requiresLocations && locationsEnabled === false) return false;
     // Hide domains the key has no access to ('none'). Items without a domain
@@ -44,6 +51,12 @@ export function Sidebar() {
         <h1 className="text-lg font-display font-bold tracking-tight" style={{ color: '#FFCC00' }}>Goose Commerce</h1>
         <p className="text-xs text-white/50 mt-0.5">Desktop Manager</p>
       </div>
+
+      {isMultisite && (
+        <div className="px-3 pt-3">
+          <SiteSwitcher />
+        </div>
+      )}
 
       <nav className="flex-1 py-4">
         <ul className="space-y-0.5 px-3">
@@ -90,6 +103,14 @@ export function Sidebar() {
         <p className="text-xs text-white/30">v{__APP_VERSION__}</p>
       </div>
     </aside>
+  );
+}
+
+function StartingIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+    </svg>
   );
 }
 

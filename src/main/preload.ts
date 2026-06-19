@@ -7,6 +7,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     load: () => ipcRenderer.invoke('credentials:load'),
     clear: () => ipcRenderer.invoke('credentials:clear'),
   },
+  sites: {
+    load: () => ipcRenderer.invoke('sites:load'),
+    save: (state: unknown) => ipcRenderer.invoke('sites:save', state),
+    setActive: (id: string) => ipcRenderer.invoke('sites:set-active', id),
+  },
   mcp: {
     request: (siteUrl: string, apiKey: string, body: unknown) =>
       ipcRenderer.invoke('mcp:request', siteUrl, apiKey, body),

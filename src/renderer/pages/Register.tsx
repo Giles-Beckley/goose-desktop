@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useConnectionStore } from '../stores/connectionStore';
 import { useMcp } from '../hooks/useMcp';
-import { McpClient } from '../services/mcpClient';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { TitleBar } from '../components/TitleBar';
+import { newSiteId } from '../../shared/ids';
+import type { SiteConnection } from '../../shared/types';
 
 export function Register() {
-  const { setCredentials, setOnboarded, setStatus, setAccess, setCurrency, setAddressSettings } = useConnectionStore();
+  const { setSites, setActiveSite, setOnboarded } = useConnectionStore();
   const { testConnection } = useMcp();
 
   const [siteUrl, setSiteUrl] = useState('');
@@ -33,22 +34,18 @@ export function Register() {
         return;
       }
 
-      // Save site credentials
-      await window.electronAPI.credentials.save({ siteUrl, apiKey: mcpApiKey });
-      setCredentials(siteUrl, mcpApiKey);
-      setStatus('connected');
-
-      // Read the new key's Access Group so the UI gates domains from the start.
-      try {
-        const client = new McpClient(siteUrl, mcpApiKey);
-        setAccess(await client.getAccess());
-        const settings = await client.getStoreSettings();
-        if (settings.currency) setCurrency(settings.currency);
-        if (settings.addresses) setAddressSettings(settings.addresses);
-      } catch {
-        setAccess(null);
-      }
-
+      // Persist this as the first connected site, then make it active.
+      // setActiveSite re-points the connection and runs the access/currency/
+      // locations probes itself, so the UI gates domains from the start.
+      const site: SiteConnection = {
+        id: newSiteId(),
+        label: siteUrl,
+        siteUrl,
+        apiKey: mcpApiKey,
+      };
+      await window.electronAPI.sites.save({ sites: [site], activeSiteId: site.id });
+      setSites([site]);
+      setActiveSite(site.id);
       setOnboarded(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Connection failed. Check your internet connection.');

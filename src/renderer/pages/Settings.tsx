@@ -1,18 +1,19 @@
 import { useState, useEffect } from 'react';
 import { useConnectionStore } from '../stores/connectionStore';
 import { useMcp } from '../hooks/useMcp';
-import { McpClient } from '../services/mcpClient';
 import { LoadingSpinner } from '../components/LoadingSpinner';
-import type { UpdaterStatus } from '../../shared/types';
+import { newSiteId } from '../../shared/ids';
+import type { SiteConnection, UpdaterStatus } from '../../shared/types';
 
 export function Settings() {
   const {
     siteUrl, apiKey, status,
+    sites, activeSiteId, setSites, setActiveSite,
     aiConnected, aiTier, aiEmail,
     aiLimits, aiUsageToday, aiUsageMonth,
     licenseKey, licenseValid, licensePlanTier, licenseStatus, licenseExpiresAt, licenseEmail,
-    setCredentials, clearCredentials, setOnboarded,
-    setAiStatus, setLicense, clearLicense, setAccess, setCurrency, setAddressSettings,
+    clearCredentials, setOnboarded,
+    setAiStatus, setLicense, clearLicense,
   } = useConnectionStore();
   const { testConnection } = useMcp();
 
@@ -20,6 +21,24 @@ export function Settings() {
   const [key, setKey] = useState(apiKey);
   const [testing, setTesting] = useState(false);
   const [message, setMessage] = useState('');
+
+  // Add-site form state
+  const [addingSite, setAddingSite] = useState(false);
+  const [newUrl, setNewUrl] = useState('');
+  const [newKey, setNewKey] = useState('');
+  const [connectingNew, setConnectingNew] = useState(false);
+  const [addMessage, setAddMessage] = useState('');
+
+  // Keep the active-site editor fields in sync when the active site changes.
+  useEffect(() => {
+    setUrl(siteUrl);
+    setKey(apiKey);
+  }, [siteUrl, apiKey, activeSiteId]);
+
+  /** Persist the current sites list to disk. */
+  const persistSites = async (next: SiteConnection[], nextActiveId: string | null) => {
+    await window.electronAPI.sites.save({ sites: next, activeSiteId: nextActiveId });
+  };
 
   // AI settings
   const [testingAi, setTestingAi] = useState(false);
@@ -62,35 +81,88 @@ export function Settings() {
       setMessage('Please enter both Site URL and API Key.');
       return;
     }
-    const saved = await window.electronAPI.credentials.save({ siteUrl: url, apiKey: key });
+    if (!activeSiteId) {
+      setMessage('No active site to update.');
+      return;
+    }
+    // Update the active site's connection in the list, persist, then re-activate
+    // it so setActiveSite re-reads the (possibly changed) key's Access Group and
+    // store settings under its staleness guard.
+    const next = sites.map((s) =>
+      s.id === activeSiteId ? { ...s, siteUrl: url, apiKey: key, label: s.label || url } : s,
+    );
+    setSites(next);
+    const saved = await window.electronAPI.sites.save({ sites: next, activeSiteId });
     if (saved) {
-      setCredentials(url, key);
-      // The key may have changed — re-read its Access Group so the UI re-gates,
-      // and refresh the store currency in case the site changed.
-      try {
-        const client = new McpClient(url, key);
-        setAccess(await client.getAccess());
-        const settings = await client.getStoreSettings();
-        if (settings.currency) setCurrency(settings.currency);
-        if (settings.addresses) setAddressSettings(settings.addresses);
-      } catch {
-        setAccess(null);
-      }
+      setActiveSite(activeSiteId);
       setMessage('Credentials saved successfully.');
     } else {
       setMessage('Failed to save credentials.');
     }
   };
 
-  const handleDisconnect = async () => {
-    await window.electronAPI.credentials.clear();
-    await window.electronAPI.license.clearKey();
-    clearLicense();
-    clearCredentials();
-    setOnboarded(false);
-    setUrl('');
-    setKey('');
-    setMessage('Disconnected and credentials cleared.');
+  // Remove a site. Removing the active one re-points to the first remaining
+  // site; removing the last one resets the app to onboarding.
+  const handleRemoveSite = async (id: string) => {
+    const next = sites.filter((s) => s.id !== id);
+    if (next.length === 0) {
+      await window.electronAPI.sites.save({ sites: [], activeSiteId: null });
+      await window.electronAPI.license.clearKey();
+      clearLicense();
+      clearCredentials();
+      setOnboarded(false);
+      setMessage('All sites disconnected.');
+      return;
+    }
+    const nextActiveId = id === activeSiteId ? next[0].id : activeSiteId;
+    setSites(next);
+    await window.electronAPI.sites.save({ sites: next, activeSiteId: nextActiveId });
+    if (id === activeSiteId && nextActiveId) {
+      setActiveSite(nextActiveId);
+    }
+    setMessage('Site removed.');
+  };
+
+  const handleSwitchSite = (id: string) => {
+    if (id === activeSiteId) return;
+    setActiveSite(id);
+    void window.electronAPI.sites.setActive(id);
+    setMessage('');
+  };
+
+  const handleRenameSite = async (id: string, label: string) => {
+    const next = sites.map((s) => (s.id === id ? { ...s, label } : s));
+    setSites(next);
+    await persistSites(next, activeSiteId);
+  };
+
+  const handleAddSite = async () => {
+    if (!newUrl || !newKey) {
+      setAddMessage('Please enter both Site URL and API Key.');
+      return;
+    }
+    if (sites.some((s) => s.siteUrl.replace(/\/+$/, '') === newUrl.replace(/\/+$/, ''))) {
+      setAddMessage('That site is already connected.');
+      return;
+    }
+    setConnectingNew(true);
+    setAddMessage('');
+    const ok = await testConnection(newUrl, newKey);
+    if (!ok) {
+      setAddMessage('Connection failed. Check the Site URL and MCP API Key.');
+      setConnectingNew(false);
+      return;
+    }
+    const site: SiteConnection = { id: newSiteId(), label: newUrl, siteUrl: newUrl, apiKey: newKey };
+    const next = [...sites, site];
+    setSites(next);
+    await window.electronAPI.sites.save({ sites: next, activeSiteId });
+    setNewUrl('');
+    setNewKey('');
+    setAddingSite(false);
+    setConnectingNew(false);
+    setAddMessage('');
+    setMessage(`Added ${site.label}.`);
   };
 
   const handleTestAiConnection = async () => {
@@ -184,9 +256,11 @@ export function Settings() {
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Settings</h1>
 
       <div className="max-w-xl space-y-6">
-        {/* Connection Settings */}
+        {/* Active Site Connection */}
         <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Store Connection</h2>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">
+            {sites.length > 1 ? 'Active Site Connection' : 'Store Connection'}
+          </h2>
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Site URL</label>
@@ -221,13 +295,105 @@ export function Settings() {
               <button onClick={handleSave} className="px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors">
                 Save
               </button>
-              {status !== 'disconnected' && (
-                <button onClick={handleDisconnect} className="px-4 py-2 bg-red-50 text-red-600 text-sm font-medium rounded-lg hover:bg-red-100 transition-colors">
-                  Disconnect
+              {status !== 'disconnected' && activeSiteId && (
+                <button onClick={() => handleRemoveSite(activeSiteId)} className="px-4 py-2 bg-red-50 text-red-600 text-sm font-medium rounded-lg hover:bg-red-100 transition-colors">
+                  {sites.length > 1 ? 'Disconnect this site' : 'Disconnect'}
                 </button>
               )}
             </div>
           </div>
+        </div>
+
+        {/* Connected Sites (multisite) */}
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">Connected Sites</h2>
+            {!addingSite && (
+              <button
+                onClick={() => { setAddingSite(true); setAddMessage(''); }}
+                className="px-3 py-1.5 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors"
+              >
+                Add site
+              </button>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            {sites.map((site) => (
+              <div
+                key={site.id}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border ${
+                  site.id === activeSiteId ? 'border-primary-300 bg-primary-50/40' : 'border-gray-200'
+                }`}
+              >
+                <span className={`w-2 h-2 rounded-full shrink-0 ${site.id === activeSiteId && status === 'connected' ? 'bg-green-500' : 'bg-gray-300'}`} />
+                <input
+                  value={site.label}
+                  onChange={(e) => handleRenameSite(site.id, e.target.value)}
+                  className="flex-1 min-w-0 bg-transparent text-sm font-medium text-gray-800 focus:outline-none focus:ring-1 focus:ring-primary-300 rounded px-1 py-0.5"
+                />
+                {site.id === activeSiteId ? (
+                  <span className="shrink-0 text-xs font-medium text-primary-700 px-2">Connected</span>
+                ) : (
+                  <button
+                    onClick={() => handleSwitchSite(site.id)}
+                    className="shrink-0 px-2.5 py-1 bg-gray-100 text-gray-700 text-xs font-medium rounded hover:bg-gray-200 transition-colors"
+                  >
+                    Use
+                  </button>
+                )}
+                <button
+                  onClick={() => handleRemoveSite(site.id)}
+                  className="shrink-0 px-2.5 py-1 text-red-500 text-xs font-medium rounded hover:bg-red-50 transition-colors"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {addingSite && (
+            <div className="border-t border-gray-100 pt-4 mt-4 space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Site URL</label>
+                <input
+                  type="url"
+                  value={newUrl}
+                  onChange={(e) => setNewUrl(e.target.value)}
+                  placeholder="https://anotherstore.com"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">MCP API Key</label>
+                <input
+                  type="password"
+                  value={newKey}
+                  onChange={(e) => setNewKey(e.target.value)}
+                  placeholder="Enter the MCP API key for that site"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                />
+              </div>
+              {addMessage && <p className="text-sm text-red-600">{addMessage}</p>}
+              <div className="flex gap-3">
+                <button
+                  onClick={handleAddSite}
+                  disabled={connectingNew || !newUrl || !newKey}
+                  className="px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                >
+                  {connectingNew && <LoadingSpinner size="sm" />}
+                  {connectingNew ? 'Connecting…' : 'Connect & add'}
+                </button>
+                <button
+                  onClick={() => { setAddingSite(false); setNewUrl(''); setNewKey(''); setAddMessage(''); }}
+                  disabled={connectingNew}
+                  className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* AI License */}
