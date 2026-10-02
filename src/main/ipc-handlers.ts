@@ -32,6 +32,49 @@ interface SitesStateRecord {
 
 const EMPTY_SITES: SitesStateRecord = { sites: [], activeSiteId: null };
 
+// Friendly messages for the plugin's MCP auth error codes (WP REST error `code`).
+const MCP_AUTH_ERRORS: Record<string, string> = {
+  no_auth: 'This site needs a newer version of Goose Commerce Desktop. Please update the app.',
+  invalid_key: 'The API key was rejected. Check it, or generate a new one in Goose Commerce › MCP.',
+  inactive_key: 'This API key is disabled or has expired.',
+  expired_key: 'This API key is disabled or has expired.',
+  rate_limit_exceeded: 'Too many requests. Wait a minute and try again.',
+};
+
+// Thrown with a user-facing message that should be shown as-is.
+class McpAuthError extends Error {}
+
+/**
+ * POST a JSON-RPC body to a site's MCP endpoint. The API key is sent in the
+ * X-API-Key header only — never in the URL (plugin >= 1.0.174 rejects
+ * ?api_key=, and URLs leak into server logs). X-API-Key rather than
+ * Authorization: Bearer because some CGI/FastCGI hosts strip Authorization.
+ */
+async function mcpFetch(siteUrl: string, apiKey: string, body: unknown): Promise<unknown> {
+  const normalizedUrl = siteUrl.replace(/\/+$/, '');
+  const response = await net.fetch(`${normalizedUrl}/wp-json/mcp/v1/mcp`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-API-Key': apiKey,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    let code: string | undefined;
+    try {
+      code = ((await response.json()) as { code?: string })?.code;
+    } catch {
+      // Body wasn't JSON — fall through to the generic message
+    }
+    if (code && MCP_AUTH_ERRORS[code]) throw new McpAuthError(MCP_AUTH_ERRORS[code]);
+    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
 function readSitesFile(): SitesStateRecord | null {
   const sitesPath = getSitesPath();
   if (!fs.existsSync(sitesPath)) return null;
@@ -175,24 +218,7 @@ export function registerIpcHandlers(): void {
   // MCP request proxy
   ipcMain.handle('mcp:request', async (_event, siteUrl: string, apiKey: string, body: unknown) => {
     try {
-      // Normalize the site URL
-      const normalizedUrl = siteUrl.replace(/\/+$/, '');
-      const url = `${normalizedUrl}/wp-json/mcp/v1/mcp?api_key=${encodeURIComponent(apiKey)}`;
-
-      const response = await net.fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      return data;
+      return await mcpFetch(siteUrl, apiKey, body);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       return {
@@ -200,7 +226,7 @@ export function registerIpcHandlers(): void {
         id: (body as { id?: unknown })?.id ?? null,
         error: {
           code: -32000,
-          message: `Request failed: ${message}`,
+          message: error instanceof McpAuthError ? message : `Request failed: ${message}`,
         },
       };
     }
@@ -326,9 +352,6 @@ export function registerIpcHandlers(): void {
 
         try {
           // Call MCP upload_image_from_url via the MCP endpoint
-          const normalizedUrl = payload.siteUrl.replace(/\/+$/, '');
-          const mcpUrl = `${normalizedUrl}/wp-json/mcp/v1/mcp?api_key=${encodeURIComponent(payload.apiKey)}`;
-
           const mcpBody = {
             jsonrpc: '2.0',
             id: Date.now(),
@@ -342,13 +365,7 @@ export function registerIpcHandlers(): void {
             },
           };
 
-          const response = await net.fetch(mcpUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(mcpBody),
-          });
-
-          const data = await response.json();
+          const data = (await mcpFetch(payload.siteUrl, payload.apiKey, mcpBody)) as any;
 
           // Parse the MCP response to get attachment_id
           const resultText = data?.result?.content?.[0]?.text;
