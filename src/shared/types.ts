@@ -125,7 +125,10 @@ export type AccessDomain =
   | 'document'
   | 'export'
   | 'taxonomy'
-  | 'media';
+  | 'media'
+  // Add-on domain (Goose Warehouse Picking Planner). Add-on slugs default to
+  // 'none' on existing groups until an admin grants them in WP.
+  | 'warehouse';
 
 /**
  * The ggmcAccess block returned in the `initialize` result (and by the

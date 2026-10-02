@@ -46,7 +46,7 @@ export function useMcp() {
   const callTool = useCallback(async (
     toolName: string,
     args: Record<string, unknown> = {},
-    opts?: { quiet?: boolean }
+    opts?: { quiet?: boolean; rethrow?: boolean }
   ): Promise<McpToolResult | null> => {
     const client = getClient();
     if (!client) return null;
@@ -67,6 +67,9 @@ export function useMcp() {
         // whole app to "Connection Error".
         setStatus('error');
       }
+      // { rethrow: true } hands the error back to callers that report it
+      // themselves (e.g. the warehouse editor reads the `access_denied:` code).
+      if (opts?.rethrow) throw error;
       return null;
     }
   }, [getClient, setStatus, setAccess, ensureInitialized]);

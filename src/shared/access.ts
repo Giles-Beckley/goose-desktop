@@ -15,7 +15,12 @@ const LEVEL_RANK: Record<AccessLevel, number> = { none: 0, read: 1, write: 2 };
  * - No access block yet (null) => assume 'write' so the UI doesn't flicker
  *   away before initialize resolves; call sites re-gate once access loads.
  * - Unrestricted key (restricted === false) => every domain is 'write'.
- * - Restricted key => the explicit level, or 'none' if the domain is missing.
+ * - Restricted key => the explicit level, or 'none' if the domain is missing
+ *   or the level isn't one we recognise.
+ *
+ * `domains` may also carry add-on slugs this app doesn't know about (see
+ * docs/mcp-access-contract.md). They are never iterated, only looked up by a
+ * known AccessDomain, so unknown keys are simply ignored.
  */
 export function levelForDomain(
   access: GgmcAccess | null,
@@ -23,7 +28,8 @@ export function levelForDomain(
 ): AccessLevel {
   if (!access) return 'write';
   if (!access.restricted) return 'write';
-  return access.domains?.[domain] ?? 'none';
+  const level = access.domains?.[domain];
+  return level && level in LEVEL_RANK ? level : 'none';
 }
 
 /** True if the key may perform an operation of `need` on `domain`. */

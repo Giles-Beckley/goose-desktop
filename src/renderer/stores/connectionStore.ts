@@ -47,6 +47,7 @@ interface ConnectionState {
   // Premium component gates (null = not yet probed)
   locationsEnabled: boolean | null;
   setLocationsEnabled: (enabled: boolean | null) => void;
+  warehouseEnabled: boolean | null;
 
   // Access Group for the active key (null = not yet known / unrestricted).
   // Read from initialize's ggmcAccess block; re-read whenever the key changes.
@@ -115,6 +116,7 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
 
   locationsEnabled: null,
   setLocationsEnabled: (enabled) => set({ locationsEnabled: enabled }),
+  warehouseEnabled: null,
 
   access: null,
   setAccess: (access) => set({ access }),
@@ -154,6 +156,7 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
       status: 'connecting',
       access: null,
       locationsEnabled: null,
+      warehouseEnabled: null,
       currency: DEFAULT_CURRENCY,
       addressSettings: DEFAULT_ADDRESS_SETTINGS,
     });
@@ -208,6 +211,26 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
         if (isCurrent()) set({ locationsEnabled: true });
       }
     })();
+
+    // Same probe for the Warehouse Picking Planner add-on ('warehouse-picking').
+    void (async () => {
+      try {
+        await client.initialize();
+        const result = await client.callTool(MCP_TOOLS.WAREHOUSE.LIST_WAREHOUSES, {});
+        const text = result?.content?.[0]?.text;
+        let enabled = true;
+        if (text) {
+          try {
+            const data = JSON.parse(text);
+            if (data?.error === 'license_inactive') enabled = false;
+          } catch { /* treat as enabled */ }
+        }
+        if (isCurrent()) set({ warehouseEnabled: enabled });
+      } catch {
+        // Network/connection issue — treat as enabled so the UI doesn't vanish.
+        if (isCurrent()) set({ warehouseEnabled: true });
+      }
+    })();
   },
   setAiStatus: (status: AIStatusResponse) =>
     set({
@@ -259,6 +282,7 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
       currency: DEFAULT_CURRENCY,
       addressSettings: DEFAULT_ADDRESS_SETTINGS,
       locationsEnabled: null,
+      warehouseEnabled: null,
       aiConnected: false,
       aiTier: 'free',
       aiAllowedModels: [],

@@ -1,0 +1,303 @@
+/*
+ * Goose Warehouse Picking Planner editor.
+ *
+ * Everything is scoped under .gwpp-planner and prefixed gwpp- so it can sit
+ * inside WP admin (alongside core's ggmc admin CSS) and inside the desktop
+ * app (alongside Tailwind) without either leaking in. Colours follow Goose
+ * Commerce: primary teal #0F766E, accent orange #F97316.
+ *
+ * Height: hosts set --gwpp-height (WP admin fills the viewport below the
+ * admin bar; the desktop app passes 100%).
+ */
+
+.gwpp-planner {
+  --gwpp-primary: #0f766e;
+  --gwpp-primary-dark: #115e59;
+  --gwpp-primary-soft: #ccfbf1;
+  --gwpp-accent: #f97316;
+  --gwpp-text: #1e293b;
+  --gwpp-muted: #64748b;
+  --gwpp-border: #e2e8f0;
+  --gwpp-surface: #ffffff;
+  --gwpp-canvas-bg: #f1f5f9;
+  --gwpp-floor: #ffffff;
+  --gwpp-danger: #b91c1c;
+  --gwpp-warning-bg: #fff7ed;
+  --gwpp-warning-border: #fdba74;
+  --gwpp-success-bg: #f0fdfa;
+  --gwpp-error-bg: #fef2f2;
+
+  --gwpp-rack: #99f6e4;
+  --gwpp-rack-stroke: #0f766e;
+  --gwpp-wall: #334155;
+  --gwpp-obstacle: #94a3b8;
+  --gwpp-zone: rgba(59, 130, 246, 0.08);
+  --gwpp-zone-stroke: #60a5fa;
+  --gwpp-pack: #fdba74;
+  --gwpp-pack-stroke: #ea580c;
+  --gwpp-start: #bbf7d0;
+  --gwpp-start-stroke: #16a34a;
+  --gwpp-door: #bfdbfe;
+  --gwpp-door-stroke: #2563eb;
+
+  box-sizing: border-box;
+  height: var(--gwpp-height, calc(100vh - 140px));
+  min-height: 480px;
+  display: flex;
+  flex-direction: column;
+  color: var(--gwpp-text);
+  font-family: 'DM Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.gwpp-planner *,
+.gwpp-planner *::before,
+.gwpp-planner *::after {
+  box-sizing: inherit;
+}
+
+.gwpp-planner .gwpp-title {
+  margin: 0;
+  font-family: 'Bricolage Grotesque', 'DM Sans', system-ui, sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+/* --- Buttons and fields ------------------------------------------------ */
+
+.gwpp-planner .gwpp-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 4px 12px;
+  border: 1px solid var(--gwpp-border);
+  border-radius: 8px;
+  background: var(--gwpp-surface);
+  color: var(--gwpp-text);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.gwpp-planner .gwpp-button:hover:not(:disabled) { border-color: var(--gwpp-primary); color: var(--gwpp-primary); }
+.gwpp-planner .gwpp-button:disabled { opacity: 0.45; cursor: default; }
+.gwpp-planner .gwpp-button:focus-visible,
+.gwpp-planner .gwpp-tool:focus-visible,
+.gwpp-planner .gwpp-card:focus-visible { outline: 2px solid var(--gwpp-primary); outline-offset: 2px; }
+.gwpp-planner .gwpp-button.is-primary { background: var(--gwpp-primary); border-color: var(--gwpp-primary); color: #fff; }
+.gwpp-planner .gwpp-button.is-primary:hover:not(:disabled) { background: var(--gwpp-primary-dark); color: #fff; }
+.gwpp-planner .gwpp-button.is-danger { color: var(--gwpp-danger); }
+.gwpp-planner .gwpp-button.is-danger:hover:not(:disabled) { border-color: var(--gwpp-danger); color: var(--gwpp-danger); }
+.gwpp-planner .gwpp-button.is-ghost { border-color: transparent; background: transparent; padding-left: 4px; }
+.gwpp-planner .gwpp-button.is-icon { width: 32px; justify-content: center; padding: 0; font-size: 16px; }
+.gwpp-planner .gwpp-button-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+
+.gwpp-planner .gwpp-link {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: var(--gwpp-border);
+  cursor: pointer;
+}
+.gwpp-planner .gwpp-link:hover { color: var(--gwpp-primary); }
+
+.gwpp-planner .gwpp-field { display: flex; flex-direction: column; gap: 4px; margin: 0 0 12px; min-width: 0; border: 0; padding: 0; }
+.gwpp-planner .gwpp-field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+.gwpp-planner .gwpp-label,
+.gwpp-planner .gwpp-faces legend { font-size: 12px; font-weight: 600; color: var(--gwpp-muted); padding: 0; margin-bottom: 4px; }
+.gwpp-planner .gwpp-input {
+  width: 100%;
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 1px solid var(--gwpp-border);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--gwpp-text);
+  font: inherit;
+  box-shadow: none;
+}
+.gwpp-planner .gwpp-input:focus { outline: none; border-color: var(--gwpp-primary); box-shadow: 0 0 0 1px var(--gwpp-primary); }
+.gwpp-planner .gwpp-input[readonly] { background: var(--gwpp-canvas-bg); }
+.gwpp-planner .gwpp-input-unit { display: flex; align-items: center; gap: 6px; }
+.gwpp-planner .gwpp-input-unit > span { color: var(--gwpp-muted); }
+.gwpp-planner .gwpp-check { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 500; }
+.gwpp-planner .gwpp-check input { margin: 0; accent-color: var(--gwpp-primary); }
+.gwpp-planner .gwpp-check-row { display: flex; margin: 0 0 12px; }
+.gwpp-planner .gwpp-faces { flex-direction: row; flex-wrap: wrap; gap: 6px 14px; }
+.gwpp-planner .gwpp-faces legend { width: 100%; }
+.gwpp-planner .gwpp-hint { margin: 0; font-size: 12px; color: var(--gwpp-muted); }
+.gwpp-planner .gwpp-error { margin: 0 0 8px; color: var(--gwpp-danger); }
+.gwpp-planner .gwpp-summary { margin: 0; }
+.gwpp-planner .gwpp-summary code { font-size: 12px; background: var(--gwpp-canvas-bg); padding: 1px 4px; border-radius: 4px; }
+.gwpp-planner .gwpp-loading { color: var(--gwpp-muted); padding: 24px 0; }
+
+/* --- Messages ---------------------------------------------------------- */
+
+.gwpp-planner .gwpp-message {
+  position: relative;
+  margin: 0 0 12px;
+  padding: 10px 40px 10px 14px;
+  border: 1px solid var(--gwpp-border);
+  border-radius: 8px;
+  background: var(--gwpp-surface);
+}
+.gwpp-planner .gwpp-message p { margin: 0 0 6px; }
+.gwpp-planner .gwpp-message p:last-child { margin-bottom: 0; }
+.gwpp-planner .gwpp-message.is-success { background: var(--gwpp-success-bg); border-color: #5eead4; }
+.gwpp-planner .gwpp-message.is-warning { background: var(--gwpp-warning-bg); border-color: var(--gwpp-warning-border); }
+.gwpp-planner .gwpp-message.is-error { background: var(--gwpp-error-bg); border-color: #fca5a5; }
+.gwpp-planner .gwpp-dismiss {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  border: 0;
+  background: none;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--gwpp-muted);
+  cursor: pointer;
+}
+
+/* --- Warehouse list ---------------------------------------------------- */
+
+.gwpp-planner .gwpp-list { max-width: 960px; }
+.gwpp-planner .gwpp-list-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 8px 0 16px; }
+.gwpp-planner .gwpp-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
+.gwpp-planner .gwpp-cards li { margin: 0; }
+.gwpp-planner .gwpp-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  padding: 16px;
+  border: 1px solid var(--gwpp-border);
+  border-radius: 12px;
+  background: var(--gwpp-surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.gwpp-planner .gwpp-card:hover { border-color: var(--gwpp-primary); }
+.gwpp-planner .gwpp-card-title { font-weight: 700; font-size: 16px; }
+.gwpp-planner .gwpp-card-meta { color: var(--gwpp-muted); font-size: 13px; }
+.gwpp-planner .gwpp-badge { font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--gwpp-muted); }
+.gwpp-planner .gwpp-empty { padding: 32px; border: 1px dashed var(--gwpp-border); border-radius: 12px; background: var(--gwpp-surface); text-align: center; }
+.gwpp-planner .gwpp-empty p { margin: 0 0 4px; }
+.gwpp-planner .gwpp-create { max-width: 420px; margin-bottom: 16px; }
+
+/* --- Editor layout ----------------------------------------------------- */
+
+.gwpp-planner .gwpp-editor { display: flex; flex-direction: column; flex: 1; min-height: 0; outline: none; }
+.gwpp-planner .gwpp-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 8px 0 12px;
+}
+.gwpp-planner .gwpp-tool-group { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.gwpp-planner .gwpp-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 3px 10px;
+  border: 1px solid var(--gwpp-border);
+  border-radius: 999px;
+  background: var(--gwpp-surface);
+  color: var(--gwpp-text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.gwpp-planner .gwpp-tool:hover { border-color: var(--gwpp-primary); }
+.gwpp-planner .gwpp-swatch { width: 12px; height: 12px; border-radius: 3px; border: 1.5px solid; }
+.gwpp-planner .gwpp-tool-rack .gwpp-swatch { background: var(--gwpp-rack); border-color: var(--gwpp-rack-stroke); }
+.gwpp-planner .gwpp-tool-wall .gwpp-swatch { background: var(--gwpp-wall); border-color: var(--gwpp-wall); }
+.gwpp-planner .gwpp-tool-obstacle .gwpp-swatch { background: var(--gwpp-obstacle); border-color: #64748b; }
+.gwpp-planner .gwpp-tool-zone .gwpp-swatch { background: var(--gwpp-zone); border-color: var(--gwpp-zone-stroke); border-style: dashed; }
+.gwpp-planner .gwpp-tool-door .gwpp-swatch { background: var(--gwpp-door); border-color: var(--gwpp-door-stroke); }
+.gwpp-planner .gwpp-tool-pack_station .gwpp-swatch { background: var(--gwpp-pack); border-color: var(--gwpp-pack-stroke); }
+.gwpp-planner .gwpp-tool-start .gwpp-swatch { background: var(--gwpp-start); border-color: var(--gwpp-start-stroke); border-radius: 50%; }
+.gwpp-planner .gwpp-save { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+.gwpp-planner .gwpp-status { font-size: 13px; color: var(--gwpp-muted); }
+.gwpp-planner .gwpp-status.is-dirty { color: var(--gwpp-accent); font-weight: 600; }
+
+.gwpp-planner .gwpp-workspace { display: flex; flex: 1; min-height: 0; gap: 12px; }
+.gwpp-planner .gwpp-canvas-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--gwpp-border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--gwpp-canvas-bg);
+}
+.gwpp-planner .gwpp-canvas-hint {
+  position: absolute;
+  left: 12px;
+  bottom: 8px;
+  margin: 0;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.85);
+  color: var(--gwpp-muted);
+  font-size: 12px;
+  pointer-events: none;
+}
+.gwpp-planner .gwpp-sidebar { width: 300px; flex-shrink: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+.gwpp-planner .gwpp-panel { padding: 14px; border: 1px solid var(--gwpp-border); border-radius: 12px; background: var(--gwpp-surface); }
+.gwpp-planner .gwpp-panel-title { margin: 0 0 12px; font-size: 14px; font-weight: 700; }
+.gwpp-planner .gwpp-issues { margin: 0; padding-left: 18px; }
+.gwpp-planner .gwpp-issues li { margin-bottom: 6px; }
+.gwpp-planner .gwpp-issues li.is-warning { color: #9a3412; }
+
+@media (max-width: 900px) {
+  .gwpp-planner { height: auto; }
+  .gwpp-planner .gwpp-workspace { flex-direction: column; }
+  .gwpp-planner .gwpp-canvas-wrap { min-height: 420px; }
+  .gwpp-planner .gwpp-sidebar { width: auto; }
+}
+
+/* --- Canvas ------------------------------------------------------------ */
+
+.gwpp-planner .gwpp-canvas { display: block; width: 100%; height: 100%; touch-action: none; user-select: none; cursor: grab; }
+.gwpp-planner .gwpp-canvas:active { cursor: grabbing; }
+.gwpp-planner .gwpp-floor { fill: var(--gwpp-floor); stroke: var(--gwpp-wall); stroke-width: 3px; }
+.gwpp-planner .gwpp-grid-line { fill: none; stroke: #e2e8f0; stroke-width: 1px; }
+.gwpp-planner .gwpp-hatch-line { stroke: #64748b; stroke-width: 1px; }
+
+.gwpp-planner .gwpp-el { cursor: move; }
+.gwpp-planner .gwpp-canvas.is-readonly .gwpp-el { cursor: pointer; }
+.gwpp-planner .gwpp-el-body { stroke-width: 1.5px; }
+.gwpp-planner .gwpp-el-rack .gwpp-el-body { fill: var(--gwpp-rack); stroke: var(--gwpp-rack-stroke); }
+.gwpp-planner .gwpp-el-wall .gwpp-el-body { fill: var(--gwpp-wall); stroke: var(--gwpp-wall); }
+.gwpp-planner .gwpp-el-obstacle .gwpp-el-body { stroke: #64748b; }
+.gwpp-planner .gwpp-el-obstacle { --gwpp-obstacle-fill: var(--gwpp-obstacle); }
+.gwpp-planner .gwpp-el-zone .gwpp-el-body { fill: var(--gwpp-zone); stroke: var(--gwpp-zone-stroke); stroke-dasharray: 6 4; }
+.gwpp-planner .gwpp-el-pack_station .gwpp-el-body { fill: var(--gwpp-pack); stroke: var(--gwpp-pack-stroke); }
+.gwpp-planner .gwpp-el-start .gwpp-el-body { fill: var(--gwpp-start); stroke: var(--gwpp-start-stroke); }
+.gwpp-planner .gwpp-el-door .gwpp-el-body { fill: var(--gwpp-door); stroke: var(--gwpp-door-stroke); }
+.gwpp-planner .gwpp-el.is-selected .gwpp-el-body { stroke: var(--gwpp-accent); stroke-width: 2.5px; }
+.gwpp-planner .gwpp-el-label { fill: var(--gwpp-text); font-weight: 700; pointer-events: none; }
+.gwpp-planner .gwpp-el-wall .gwpp-el-label { fill: #fff; }
+.gwpp-planner .gwpp-el-zone .gwpp-el-label { fill: #1d4ed8; font-weight: 600; }
+.gwpp-planner .gwpp-bay-divider { stroke: var(--gwpp-rack-stroke); stroke-width: 1px; opacity: 0.55; }
+.gwpp-planner .gwpp-pick-face { stroke: var(--gwpp-primary-dark); stroke-width: 4px; stroke-linecap: square; }
+.gwpp-planner .gwpp-access { fill: #fff; stroke: var(--gwpp-primary); stroke-width: 1.5px; }
+.gwpp-planner .gwpp-access.is-assigned { fill: var(--gwpp-primary); }
+.gwpp-planner .gwpp-bay-code { fill: var(--gwpp-muted); font-weight: 600; }
+.gwpp-planner .gwpp-handle { fill: #fff; stroke: var(--gwpp-accent); stroke-width: 1.5px; }
+.gwpp-planner .gwpp-handle-n, .gwpp-planner .gwpp-handle-s { cursor: ns-resize; }
+.gwpp-planner .gwpp-handle-e, .gwpp-planner .gwpp-handle-w { cursor: ew-resize; }
+.gwpp-planner .gwpp-handle-nw, .gwpp-planner .gwpp-handle-se { cursor: nwse-resize; }
+.gwpp-planner .gwpp-handle-ne, .gwpp-planner .gwpp-handle-sw { cursor: nesw-resize; }

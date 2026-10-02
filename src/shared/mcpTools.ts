@@ -166,6 +166,27 @@ export const MCP_TOOLS = {
   LIST_PRODUCT_OUTLETS: 'list_product_outlets',
   SEARCH_OUTLETS_NEAR: 'search_outlets_near',
   SEARCH_LISTINGS_NEAR: 'search_listings_near',
+
+  // Warehouse Picking Planner (add-on, premium component: 'warehouse-picking').
+  // The floor-plan editor (src/renderer/warehouse-planner) calls these by plain
+  // string; listed here for reference and for the premium probe.
+  WAREHOUSE: {
+    // Queries
+    LIST_WAREHOUSES: 'list_warehouses',
+    GET_WAREHOUSE: 'get_warehouse',
+    LIST_LOCATION_ASSIGNMENTS: 'list_location_assignments',
+    FIND_PRODUCT_LOCATIONS: 'find_product_locations',
+    SEARCH_LOCATION_PRODUCTS: 'search_location_products',
+    LIST_PICKABLE_ORDERS: 'list_pickable_orders',
+    PLAN_PICK_ROUTE: 'plan_pick_route',
+    // Actions
+    CREATE_WAREHOUSE: 'create_warehouse',
+    UPDATE_WAREHOUSE: 'update_warehouse',
+    SAVE_WAREHOUSE_LAYOUT: 'save_warehouse_layout',
+    ASSIGN_PRODUCT_LOCATION: 'assign_product_location',
+    UNASSIGN_PRODUCT_LOCATION: 'unassign_product_location',
+    RELINK_PRODUCT_LOCATION: 'relink_product_location',
+  },
 } as const;
 
 // ── Resources (read-only data) ──────────────────────────────────────────

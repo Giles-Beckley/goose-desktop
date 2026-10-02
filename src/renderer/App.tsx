@@ -9,6 +9,7 @@ import { Customers } from './pages/Customers';
 import { Exports } from './pages/Exports';
 import { Discounts } from './pages/Discounts';
 import { Locations } from './pages/Locations';
+import { Warehouse } from './pages/Warehouse';
 import { Settings } from './pages/Settings';
 import { Assistant } from './pages/Assistant';
 import { Register } from './pages/Register';
@@ -150,6 +151,7 @@ export function App() {
             <Route path="/exports" element={<Exports />} />
             <Route path="/discounts" element={<Discounts />} />
             <Route path="/locations" element={<Locations />} />
+            <Route path="/warehouse" element={<Warehouse />} />
             <Route path="/settings" element={<Settings />} />
           </Route>
         </Routes>

@@ -9,6 +9,7 @@ interface NavItem {
   icon: () => JSX.Element;
   requiresLicense?: boolean;
   requiresLocations?: boolean;
+  requiresWarehouse?: boolean;
   /** Only shown when more than one site is connected (multisite). */
   requiresMultisite?: boolean;
   /** Access Group domain this nav item maps to. Items with no domain are
@@ -24,13 +25,14 @@ const navItems: NavItem[] = [
   { to: '/orders', label: 'Orders', icon: OrdersIcon, domain: 'order' },
   { to: '/customers', label: 'Customers', icon: CustomersIcon, domain: 'customer' },
   { to: '/locations', label: 'Locations', icon: LocationsIcon, requiresLocations: true, domain: 'outlet' },
+  { to: '/warehouse', label: 'Warehouse', icon: WarehouseIcon, requiresWarehouse: true, domain: 'warehouse' },
   { to: '/exports', label: 'Exports', icon: ExportsIcon, domain: 'export' },
   { to: '/discounts', label: 'Discounts', icon: DiscountsIcon, domain: 'discount' },
   { to: '/settings', label: 'Settings', icon: SettingsIcon },
 ];
 
 export function Sidebar() {
-  const { licenseValid, locationsEnabled, sites } = useConnectionStore();
+  const { licenseValid, locationsEnabled, warehouseEnabled, sites } = useConnectionStore();
   const { canRead } = useAccess();
   const isMultisite = sites.length > 1;
   const visibleItems = navItems.filter((item) => {
@@ -38,6 +40,7 @@ export function Sidebar() {
     if (item.requiresMultisite && !isMultisite) return false;
     // Hide items behind a premium feature gate only once detected off.
     if (item.requiresLocations && locationsEnabled === false) return false;
+    if (item.requiresWarehouse && warehouseEnabled === false) return false;
     // Hide domains the key has no access to ('none'). Items without a domain
     // ('general' — Dashboard/Settings/Assistant) are always shown.
     if (item.domain && !canRead(item.domain)) return false;
@@ -168,6 +171,14 @@ function LocationsIcon() {
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+  );
+}
+
+function WarehouseIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 21V8l9-5 9 5v13M7 21v-9h10v9M7 15h10M7 18h10" />
     </svg>
   );
 }
